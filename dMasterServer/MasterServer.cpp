@@ -99,7 +99,10 @@ int main(int argc, char** argv) {
 			Game::logger->Log("MigrationRunner", "Migrations not run\n");
 			return EXIT_FAILURE;
 		}
+		MigrationRunner::RunMigrations();
+		Game::logger->Log("MigrationRunner", "Finished running migrations\n");
 
+		return EXIT_SUCCESS;
 	}
 	else {
 
