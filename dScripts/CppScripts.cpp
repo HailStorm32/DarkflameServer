@@ -61,6 +61,8 @@
 #include "VeMissionConsole.h"
 #include "VeEpsilonServer.h"
 #include "AgSurvivalBuffStation.h"
+#include "QbSpawner.h"
+#include "AgQbWall.h"
 
 // NS Scripts
 #include "NsModularBuild.h"
@@ -286,6 +288,9 @@
 #include "RockHydrantBroken.h"
 #include "WhFans.h"
 
+// WBL scripts
+#include "WblGenericZone.h"
+
 //Big bad global bc this is a namespace and not a class:
 InvalidScript* invalidToReturn = new InvalidScript();
 std::map<std::string, CppScripts::Script*> m_Scripts;
@@ -466,6 +471,10 @@ CppScripts::Script* CppScripts::GetScript(Entity* parent, const std::string& scr
 		script = new WildAmbients();
 	else if (scriptName == "scripts\\ai\\NS\\NS_PP_01\\L_NS_PP_01_TELEPORT.lua")
 		script = new PropertyDeathPlane();
+	else if (scriptName == "scripts\\02_server\\Map\\General\\L_QB_SPAWNER.lua")
+		script = new QbSpawner();
+	else if (scriptName == "scripts\\ai\\AG\\L_AG_QB_Wall.lua")
+		script = new AgQbWall();
 
 	//GF:
 	else if (scriptName == "scripts\\02_server\\Map\\GF\\L_GF_TORCH.lua")
@@ -828,23 +837,24 @@ CppScripts::Script* CppScripts::GetScript(Entity* parent, const std::string& scr
 		script = new BuccaneerValiantShip();
 	else if (scriptName == "scripts\\EquipmentScripts\\FireFirstSkillonStartup.lua")
 		script = new FireFirstSkillonStartup();
+
 	// FB
 	else if (scriptName == "scripts\\ai\\NS\\WH\\L_ROCKHYDRANT_BROKEN.lua")
 		script = new RockHydrantBroken();
 	else if (scriptName == "scripts\\ai\\NS\\L_NS_WH_FANS.lua")
 		script = new WhFans();
 
-	//Ignore these scripts:
-	else if (scriptName == "scripts\\02_server\\Enemy\\General\\L_SUSPEND_LUA_AI.lua")
-		script = invalidToReturn;
-	else if (scriptName == "scripts\\02_server\\Enemy\\General\\L_BASE_ENEMY_SPIDERLING.lua")
-		script = invalidToReturn;
-	else if (script == invalidToReturn) {
-		if (scriptName.length() > 0)
-			Game::logger->LogDebug("CppScripts", "Attempted to load CppScript for '%s', but returned InvalidScript.", scriptName.c_str());
-		// information not really needed for sys admins but is for developers
+	// WBL
+	else if (scriptName == "scripts\\zone\\LUPs\\WBL_generic_zone.lua")
+		script = new WblGenericZone();
 
-		script = invalidToReturn;
+	// handle invalid script reporting if the path is greater than zero and it's not an ignored script
+	// information not really needed for sys admins but is for developers
+	else if (script == invalidToReturn) {
+		if ((scriptName.length() > 0) && !((scriptName == "scripts\\02_server\\Enemy\\General\\L_SUSPEND_LUA_AI.lua") ||
+			(scriptName == "scripts\\02_server\\Enemy\\General\\L_BASE_ENEMY_SPIDERLING.lua") ||
+			(scriptName == "scripts\\empty.lua")
+			)) Game::logger->LogDebug("CppScripts", "LOT %i attempted to load CppScript for '%s', but returned InvalidScript.", parent->GetLOT(), scriptName.c_str());
 	}
 
 	m_Scripts[scriptName] = script;
