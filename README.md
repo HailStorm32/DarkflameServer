@@ -42,6 +42,10 @@ This was done make sure that older and incomplete clients wouldn't produce false
 
 If you're using a DLU client you'll have to go into the "CMakeVariables.txt" file and change the NET_VERSION variable to 171023 to match the modified client's version number.
 
+### Enabling testing
+While it is highly recommended to enable testing, if you would like to save compilation time, you'll want to comment out the enable_testing variable in CMakeVariables.txt.
+It is recommended that after building and if testing is enabled, to run `ctest` and make sure all the tests pass.
+
 ### Using Docker
 Refer to [Docker.md](/Docker.md).
 
@@ -196,9 +200,10 @@ certutil -hashfile <file> SHA256
 * Copy over or create symlinks from `locale.xml` in your client `locale` directory to the `build/locale` directory
 
 #### Client database
-* Use `fdb_to_sqlite.py` in lcdr's utilities on `res/cdclient.fdb` in the unpacked client to convert the client database to `cdclient.sqlite`
-* Move and rename `cdclient.sqlite` into `build/res/CDServer.sqlite`
-* Run each SQL file in the order at which they appear [here](migrations/cdserver/) on the SQLite database
+* Move the file `res/cdclient.fdb` from the unpacked client to the `build/res` folder on the server.
+* The server will automatically copy and convert the file from fdb to sqlite should `CDServer.sqlite` not already exist.
+* You can also convert the database manually using `fdb_to_sqlite.py` using lcdr's utilities.  Just make sure to rename the file to `CDServer.sqlite` instead of `cdclient.sqlite`.
+* Migrations to the database are automatically run on server start.  When migrations are needed to be ran, the server may take a bit longer to start.
 
 ### Database
 Darkflame Universe utilizes a MySQL/MariaDB database for account and character information.
@@ -209,7 +214,7 @@ Initial setup can vary drastically based on which operating system or distributi
 
 #### Configuration
 
-After the server has been built there should be four `ini` files in the build director: `authconfig.ini`, `chatconfig.ini`, `masterconfig.ini`, and `worldconfig.ini`. Go through them and fill in the database credentials and configure other settings if necessary.
+After the server has been built there should be four `ini` files in the build director: `sharedconfig.ini`, `authconfig.ini`, `chatconfig.ini`, `masterconfig.ini`, and `worldconfig.ini`. Go through them and fill in the database credentials and configure other settings if necessary.
 
 #### Migrations
 
@@ -229,7 +234,7 @@ Your build directory should now look like this:
 * **locale/**
   * locale.xml
 * **res/**
-  * CDServer.sqlite
+  * cdclient.fdb
   * chatplus_en_us.txt
   * **macros/**
     * ...

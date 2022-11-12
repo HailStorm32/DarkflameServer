@@ -63,6 +63,7 @@
 #include "GameConfig.h"
 #include "ScriptedActivityComponent.h"
 #include "LevelProgressionComponent.h"
+#include "AssetManager.h"
 
 void SlashCommandHandler::HandleChatCommand(const std::u16string& command, Entity* entity, const SystemAddress& sysAddr) {
 	std::string chatCommand;
@@ -582,7 +583,14 @@ void SlashCommandHandler::HandleChatCommand(const std::u16string& command, Entit
 		if (args[0].find("/") != std::string::npos) return;
 		if (args[0].find("\\") != std::string::npos) return;
 
-		std::ifstream infile("./res/macros/" + args[0] + ".scm");
+		auto buf = Game::assetManager->GetFileAsBuffer(("macros/" + args[0] + ".scm").c_str());
+
+		 if (!buf.m_Success){
+			ChatPackets::SendSystemMessage(sysAddr, u"Unknown macro! Is the filename right?");
+			return;
+		 }
+
+		std::istream infile(&buf);
 
 		if (infile.good()) {
 			std::string line;
@@ -592,6 +600,8 @@ void SlashCommandHandler::HandleChatCommand(const std::u16string& command, Entit
 		} else {
 			ChatPackets::SendSystemMessage(sysAddr, u"Unknown macro! Is the filename right?");
 		}
+
+		buf.close();
 
 		return;
 	}
@@ -1904,10 +1914,7 @@ bool SlashCommandHandler::CheckIfAccessibleZone(const unsigned int zoneID) {
 	CDZoneTableTable* zoneTable = CDClientManager::Instance()->GetTable<CDZoneTableTable>("ZoneTable");
 	const CDZoneTable* zone = zoneTable->Query(zoneID);
 	if (zone != nullptr) {
-		std::string zonePath = "./res/maps/" + zone->zoneName;
-		std::transform(zonePath.begin(), zonePath.end(), zonePath.begin(), ::tolower);
-		std::ifstream f(zonePath.c_str());
-		return f.good();
+		return Game::assetManager->HasFile(("maps/" + zone->zoneName).c_str());
 	} else {
 		return false;
 	}

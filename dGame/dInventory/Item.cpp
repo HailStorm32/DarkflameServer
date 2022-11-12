@@ -13,6 +13,7 @@
 #include "PossessableComponent.h"
 #include "CharacterComponent.h"
 #include "eItemType.h"
+#include "AssetManager.h"
 
 class Inventory;
 
@@ -340,17 +341,27 @@ void Item::DisassembleModel() {
 	std::string renderAsset = result.fieldIsNull(0) ? "" : std::string(result.getStringField(0));
 	std::vector<std::string> renderAssetSplit = GeneralUtils::SplitString(renderAsset, '\\');
 
-	std::string lxfmlPath = "res/BrickModels/" + GeneralUtils::SplitString(renderAssetSplit.back(), '.')[0] + ".lxfml";
-	std::ifstream file(lxfmlPath);
+	std::string lxfmlPath = "BrickModels/" + GeneralUtils::SplitString(renderAssetSplit.back(), '.').at(0) + ".lxfml";
+	auto buffer = Game::assetManager->GetFileAsBuffer(lxfmlPath.c_str());
+
+	if (!buffer.m_Success) {
+		Game::logger->Log("Item", "Failed to load %s to disassemble model into bricks, check that this file exists", lxfmlPath.c_str());
+		return;
+	}
+
+	std::istream file(&buffer);
 
 	result.finalize();
 
 	if (!file.good()) {
+		buffer.close();
 		return;
 	}
 
 	std::stringstream data;
 	data << file.rdbuf();
+
+	buffer.close();
 
 	if (data.str().empty()) {
 		return;
