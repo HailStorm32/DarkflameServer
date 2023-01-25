@@ -16,7 +16,11 @@
 #include "GeneralUtils.h"
 #include "dZoneManager.h"
 #include "dConfig.h"
+#include "InventoryComponent.h"
 #include "DestroyableComponent.h"
+#include "dMessageIdentifiers.h"
+#include "Loot.h"
+#include "eMissionTaskType.h"
 
 ScriptedActivityComponent::ScriptedActivityComponent(Entity* parent, int activityID) : Component(parent) {
 	m_ActivityID = activityID;
@@ -207,7 +211,7 @@ void ScriptedActivityComponent::PlayerLeave(LWOOBJID playerID) {
 }
 
 void ScriptedActivityComponent::Update(float deltaTime) {
-
+	std::vector<Lobby*> lobbiesToRemove{};
 	// Ticks all the lobbies, not applicable for non-instance activities
 	for (Lobby* lobby : m_Queue) {
 		for (LobbyPlayer* player : lobby->players) {
@@ -216,6 +220,11 @@ void ScriptedActivityComponent::Update(float deltaTime) {
 				PlayerLeave(player->entityID);
 				return;
 			}
+		}
+
+		if (lobby->players.empty()) {
+			lobbiesToRemove.push_back(lobby);
+			continue;
 		}
 
 		// Update the match time for all players
@@ -261,12 +270,16 @@ void ScriptedActivityComponent::Update(float deltaTime) {
 		// The timer has elapsed, start the instance
 		if (lobby->timer <= 0.0f) {
 			Game::logger->Log("ScriptedActivityComponent", "Setting up instance.");
-
 			ActivityInstance* instance = NewInstance();
 			LoadPlayersIntoInstance(instance, lobby->players);
-			RemoveLobby(lobby);
 			instance->StartZone();
+			lobbiesToRemove.push_back(lobby);
 		}
+	}
+
+	while (!lobbiesToRemove.empty()) {
+		RemoveLobby(lobbiesToRemove.front());
+		lobbiesToRemove.erase(lobbiesToRemove.begin());
 	}
 }
 
@@ -540,7 +553,7 @@ void ActivityInstance::StartZone() {
 void ActivityInstance::RewardParticipant(Entity* participant) {
 	auto* missionComponent = participant->GetComponent<MissionComponent>();
 	if (missionComponent) {
-		missionComponent->Progress(MissionTaskType::MISSION_TASK_TYPE_ACTIVITY, m_ActivityInfo.ActivityID);
+		missionComponent->Progress(eMissionTaskType::ACTIVITY, m_ActivityInfo.ActivityID);
 	}
 
 	// First, get the activity data

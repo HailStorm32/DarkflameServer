@@ -27,8 +27,10 @@
 #include "dConfig.h"
 #include "eItemType.h"
 #include "eUnequippableActiveType.h"
+#include "CppScripts.h"
+#include "eMissionTaskType.h"
 
-InventoryComponent::InventoryComponent(Entity* parent, tinyxml2::XMLDocument* document) : Component(parent) {
+InventoryComponent::InventoryComponent(Entity* parent, tinyxml2::XMLDocument* document): Component(parent) {
 	this->m_Dirty = true;
 	this->m_Equipped = {};
 	this->m_Pushed = {};
@@ -195,7 +197,7 @@ void InventoryComponent::AddItem(
 		auto* item = new Item(lot, inventory, slot, count, config, parent, showFlyingLoot, isModMoveAndEquip, subKey, bound, lootSourceType);
 
 		if (missions != nullptr && !IsTransferInventory(inventoryType)) {
-			missions->Progress(MissionTaskType::MISSION_TASK_TYPE_ITEM_COLLECTION, lot, LWOOBJID_EMPTY, "", count, IsTransferInventory(inventorySourceType));
+			missions->Progress(eMissionTaskType::GATHER, lot, LWOOBJID_EMPTY, "", count, IsTransferInventory(inventorySourceType));
 		}
 
 		return;
@@ -283,7 +285,7 @@ void InventoryComponent::AddItem(
 	}
 
 	if (missions != nullptr && !IsTransferInventory(inventoryType)) {
-		missions->Progress(MissionTaskType::MISSION_TASK_TYPE_ITEM_COLLECTION, lot, LWOOBJID_EMPTY, "", count - outOfSpace, IsTransferInventory(inventorySourceType));
+		missions->Progress(eMissionTaskType::GATHER, lot, LWOOBJID_EMPTY, "", count - outOfSpace, IsTransferInventory(inventorySourceType));
 	}
 }
 
@@ -372,7 +374,7 @@ void InventoryComponent::MoveItemToInventory(Item* item, const eInventoryType in
 
 	if (missionComponent != nullptr) {
 		if (IsTransferInventory(inventory)) {
-			missionComponent->Progress(MissionTaskType::MISSION_TASK_TYPE_ITEM_COLLECTION, lot, LWOOBJID_EMPTY, "", -static_cast<int32_t>(count));
+			missionComponent->Progress(eMissionTaskType::GATHER, lot, LWOOBJID_EMPTY, "", -static_cast<int32_t>(count));
 		}
 	}
 }
@@ -840,9 +842,9 @@ void InventoryComponent::EquipItem(Item* item, const bool skipChecks) {
 		const auto type = static_cast<eItemType>(item->GetInfo().itemType);
 
 
-		if (!building && (item->GetLot() == 6086 || type == eItemType::ITEM_TYPE_LOOT_MODEL || type == eItemType::ITEM_TYPE_VEHICLE)) return;
+		if (!building && (item->GetLot() == 6086 || type == eItemType::LOOT_MODEL || type == eItemType::VEHICLE)) return;
 
-		if (type != eItemType::ITEM_TYPE_LOOT_MODEL && type != eItemType::ITEM_TYPE_MODEL) {
+		if (type != eItemType::LOOT_MODEL && type != eItemType::MODEL) {
 			if (!item->GetBound() && !item->GetPreconditionExpression()->Check(m_Parent)) {
 				return;
 			}
@@ -866,6 +868,8 @@ void InventoryComponent::EquipItem(Item* item, const bool skipChecks) {
 	ApplyBuff(item);
 
 	AddItemSkills(item->GetLot());
+
+	EquipScripts(item);
 
 	EntityManager::Instance()->SerializeEntity(m_Parent);
 }
@@ -895,12 +899,45 @@ void InventoryComponent::UnEquipItem(Item* item) {
 
 	PurgeProxies(item);
 
+	UnequipScripts(item);
+
 	EntityManager::Instance()->SerializeEntity(m_Parent);
 
 	// Trigger property event
 	if (PropertyManagementComponent::Instance() != nullptr && item->GetCount() > 0 && Inventory::FindInventoryTypeForLot(item->GetLot()) == MODELS) {
 		PropertyManagementComponent::Instance()->GetParent()->OnZonePropertyModelRemovedWhileEquipped(m_Parent);
 		dZoneManager::Instance()->GetZoneControlObject()->OnZonePropertyModelRemovedWhileEquipped(m_Parent);
+	}
+}
+
+
+void InventoryComponent::EquipScripts(Item* equippedItem) {
+	CDComponentsRegistryTable* compRegistryTable = CDClientManager::Instance()->GetTable<CDComponentsRegistryTable>("ComponentsRegistry");
+	if (!compRegistryTable) return;
+	int32_t scriptComponentID = compRegistryTable->GetByIDAndType(equippedItem->GetLot(), COMPONENT_TYPE_SCRIPT, -1);
+	if (scriptComponentID > -1) {
+		CDScriptComponentTable* scriptCompTable = CDClientManager::Instance()->GetTable<CDScriptComponentTable>("ScriptComponent");
+		CDScriptComponent scriptCompData = scriptCompTable->GetByID(scriptComponentID);
+		auto* itemScript = CppScripts::GetScript(m_Parent, scriptCompData.script_name);
+		if (!itemScript) {
+			Game::logger->Log("InventoryComponent", "null script?");
+		}
+		itemScript->OnFactionTriggerItemEquipped(m_Parent, equippedItem->GetId());
+	}
+}
+
+void InventoryComponent::UnequipScripts(Item* unequippedItem) {
+	CDComponentsRegistryTable* compRegistryTable = CDClientManager::Instance()->GetTable<CDComponentsRegistryTable>("ComponentsRegistry");
+	if (!compRegistryTable) return;
+	int32_t scriptComponentID = compRegistryTable->GetByIDAndType(unequippedItem->GetLot(), COMPONENT_TYPE_SCRIPT, -1);
+	if (scriptComponentID > -1) {
+		CDScriptComponentTable* scriptCompTable = CDClientManager::Instance()->GetTable<CDScriptComponentTable>("ScriptComponent");
+		CDScriptComponent scriptCompData = scriptCompTable->GetByID(scriptComponentID);
+		auto* itemScript = CppScripts::GetScript(m_Parent, scriptCompData.script_name);
+		if (!itemScript) {
+			Game::logger->Log("InventoryComponent", "null script?");
+		}
+		itemScript->OnFactionTriggerItemUnequipped(m_Parent, unequippedItem->GetId());
 	}
 }
 
@@ -923,7 +960,7 @@ void InventoryComponent::HandlePossession(Item* item) {
 		return;
 	}
 
-	GameMessages::SendSetStunned(m_Parent->GetObjectID(), eStunState::PUSH, m_Parent->GetSystemAddress(), LWOOBJID_EMPTY, true, false, true, false, false, false, false, true, true, true, true, true, true, true, true, true);
+	GameMessages::SendSetStunned(m_Parent->GetObjectID(), eStateChangeType::PUSH, m_Parent->GetSystemAddress(), LWOOBJID_EMPTY, true, false, true, false, false, false, false, true, true, true, true, true, true, true, true, true);
 
 	// Set the mount Item ID so that we know what were handling
 	possessorComponent->SetMountItemID(item->GetId());
@@ -1160,20 +1197,20 @@ void InventoryComponent::RemoveItemSkills(const LOT lot) {
 	}
 }
 
-void InventoryComponent::TriggerPassiveAbility(PassiveAbilityTrigger trigger) {
+void InventoryComponent::TriggerPassiveAbility(PassiveAbilityTrigger trigger, Entity* target) {
 	for (auto* set : m_Itemsets) {
-		set->TriggerPassiveAbility(trigger);
+		set->TriggerPassiveAbility(trigger, target);
 	}
 }
 
-bool InventoryComponent::HasAnyPassive(const std::vector<ItemSetPassiveAbilityID>& passiveIDs, int32_t equipmentRequirement) const {
+bool InventoryComponent::HasAnyPassive(const std::vector<eItemSetPassiveAbilityID>& passiveIDs, int32_t equipmentRequirement) const {
 	for (auto* set : m_Itemsets) {
 		if (set->GetEquippedCount() < equipmentRequirement) {
 			continue;
 		}
 
 		// Check if the set has any of the passive abilities
-		if (std::find(passiveIDs.begin(), passiveIDs.end(), static_cast<ItemSetPassiveAbilityID>(set->GetID())) != passiveIDs.end()) {
+		if (std::find(passiveIDs.begin(), passiveIDs.end(), static_cast<eItemSetPassiveAbilityID>(set->GetID())) != passiveIDs.end()) {
 			return true;
 		}
 	}
@@ -1249,15 +1286,15 @@ void InventoryComponent::RemoveDatabasePet(LWOOBJID id) {
 
 BehaviorSlot InventoryComponent::FindBehaviorSlot(const eItemType type) {
 	switch (type) {
-	case eItemType::ITEM_TYPE_HAT:
+	case eItemType::HAT:
 		return BehaviorSlot::Head;
-	case eItemType::ITEM_TYPE_NECK:
+	case eItemType::NECK:
 		return BehaviorSlot::Neck;
-	case eItemType::ITEM_TYPE_LEFT_HAND:
+	case eItemType::LEFT_HAND:
 		return BehaviorSlot::Offhand;
-	case eItemType::ITEM_TYPE_RIGHT_HAND:
+	case eItemType::RIGHT_HAND:
 		return BehaviorSlot::Primary;
-	case eItemType::ITEM_TYPE_CONSUMABLE:
+	case eItemType::CONSUMABLE:
 		return BehaviorSlot::Consumable;
 	default:
 		return BehaviorSlot::Invalid;
@@ -1307,7 +1344,7 @@ std::vector<uint32_t> InventoryComponent::FindBuffs(Item* item, bool castOnEquip
 			}
 
 			if (missions != nullptr && castOnEquip) {
-				missions->Progress(MissionTaskType::MISSION_TASK_TYPE_SKILL, result.skillID);
+				missions->Progress(eMissionTaskType::USE_SKILL, result.skillID);
 			}
 
 			// If item is not a proxy, add its buff to the added buffs.
