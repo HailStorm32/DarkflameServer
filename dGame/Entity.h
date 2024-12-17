@@ -11,6 +11,7 @@
 #include "NiQuaternion.h"
 #include "LDFFormat.h"
 #include "eKillType.h"
+#include "Observable.h"
 
 namespace Loot {
 	class Info;
@@ -105,6 +106,11 @@ public:
 	const NiQuaternion& GetRotation() const;
 
 	const SystemAddress& GetSystemAddress() const;
+
+	// Returns the collision group for this entity.
+	// Because the collision group is stored on a base component, this will look for a physics component
+	// then return the collision group from that.
+	int32_t GetCollisionGroup() const;
 
 	/**
 	 * Setters
@@ -299,6 +305,11 @@ public:
 	// Scale will only be communicated to the client when the construction packet is sent
 	void SetScale(const float scale) { m_Scale = scale; };
 
+	/**
+	 * @brief The observable for player entity position updates.
+	 */
+	static Observable<Entity*, const PositionUpdate&> OnPlayerPositionUpdate;
+	
 protected:
 	LWOOBJID m_ObjectID;
 

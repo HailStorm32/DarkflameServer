@@ -24,7 +24,7 @@
 #include "eTriggerEventType.h"
 #include "eObjectBits.h"
 #include "PositionUpdate.h"
-#include "eChatMessageType.h"
+#include "MessageType/Chat.h"
 #include "PlayerManager.h"
 
 //Component includes:
@@ -83,6 +83,7 @@
 #include "ItemComponent.h"
 #include "GhostComponent.h"
 #include "AchievementVendorComponent.h"
+#include "VanityUtilities.h"
 
 // Table includes
 #include "CDComponentsRegistryTable.h"
@@ -95,6 +96,10 @@
 #include "CDScriptComponentTable.h"
 #include "CDSkillBehaviorTable.h"
 #include "CDZoneTableTable.h"
+
+#include <ranges>
+
+Observable<Entity*, const PositionUpdate&> Entity::OnPlayerPositionUpdate;
 
 Entity::Entity(const LWOOBJID& objectID, EntityInfo info, User* parentUser, Entity* parentEntity) {
 	m_ObjectID = objectID;
@@ -283,8 +288,9 @@ void Entity::Initialize() {
 		AddComponent<PropertyEntranceComponent>(propertyEntranceComponentID);
 	}
 
-	if (compRegistryTable->GetByIDAndType(m_TemplateID, eReplicaComponentType::CONTROLLABLE_PHYSICS) > 0) {
-		auto* controllablePhysics = AddComponent<ControllablePhysicsComponent>();
+	const int32_t controllablePhysicsComponentID = compRegistryTable->GetByIDAndType(m_TemplateID, eReplicaComponentType::CONTROLLABLE_PHYSICS);
+	if (controllablePhysicsComponentID > 0) {
+		auto* controllablePhysics = AddComponent<ControllablePhysicsComponent>(controllablePhysicsComponentID);
 
 		if (m_Character) {
 			controllablePhysics->LoadFromXml(m_Character->GetXMLDoc());
@@ -327,16 +333,19 @@ void Entity::Initialize() {
 		AddComponent<SimplePhysicsComponent>(simplePhysicsComponentID);
 	}
 
-	if (compRegistryTable->GetByIDAndType(m_TemplateID, eReplicaComponentType::RIGID_BODY_PHANTOM_PHYSICS) > 0) {
-		AddComponent<RigidbodyPhantomPhysicsComponent>();
+	const int32_t rigidBodyPhantomPhysicsComponentID = compRegistryTable->GetByIDAndType(m_TemplateID, eReplicaComponentType::RIGID_BODY_PHANTOM_PHYSICS);
+	if (rigidBodyPhantomPhysicsComponentID > 0) {
+		AddComponent<RigidbodyPhantomPhysicsComponent>(rigidBodyPhantomPhysicsComponentID);
 	}
 
-	if (markedAsPhantom || compRegistryTable->GetByIDAndType(m_TemplateID, eReplicaComponentType::PHANTOM_PHYSICS) > 0) {
-		AddComponent<PhantomPhysicsComponent>()->SetPhysicsEffectActive(false);
+	const int32_t phantomPhysicsComponentID = compRegistryTable->GetByIDAndType(m_TemplateID, eReplicaComponentType::PHANTOM_PHYSICS);
+	if (markedAsPhantom || phantomPhysicsComponentID > 0) {
+		AddComponent<PhantomPhysicsComponent>(phantomPhysicsComponentID)->SetPhysicsEffectActive(false);
 	}
 
-	if (compRegistryTable->GetByIDAndType(m_TemplateID, eReplicaComponentType::HAVOK_VEHICLE_PHYSICS) > 0) {
-		auto* havokVehiclePhysicsComponent = AddComponent<HavokVehiclePhysicsComponent>();
+	const int32_t havokVehiclePhysicsComponentID = compRegistryTable->GetByIDAndType(m_TemplateID, eReplicaComponentType::HAVOK_VEHICLE_PHYSICS);
+	if (havokVehiclePhysicsComponentID > 0) {
+		auto* havokVehiclePhysicsComponent = AddComponent<HavokVehiclePhysicsComponent>(havokVehiclePhysicsComponentID);
 		havokVehiclePhysicsComponent->SetPosition(m_DefaultPosition);
 		havokVehiclePhysicsComponent->SetRotation(m_DefaultRotation);
 	}
@@ -881,7 +890,7 @@ void Entity::SetGMLevel(eGameMasterLevel value) {
 	// Update the chat server of our GM Level
 	{
 		CBITSTREAM;
-		BitStreamUtils::WriteHeader(bitStream, eConnectionType::CHAT, eChatMessageType::GMLEVEL_UPDATE);
+		BitStreamUtils::WriteHeader(bitStream, eConnectionType::CHAT, MessageType::Chat::GMLEVEL_UPDATE);
 		bitStream.Write(m_ObjectID);
 		bitStream.Write(m_GMLevel);
 
@@ -1269,6 +1278,7 @@ void Entity::Update(const float deltaTime) {
 			auto timerName = timer.GetName();
 			m_Timers.erase(m_Timers.begin() + timerPosition);
 			GetScript()->OnTimerDone(this, timerName);
+			VanityUtilities::OnTimerDone(this, timerName);
 
 			TriggerEvent(eTriggerEventType::TIMER_DONE, this);
 		} else {
@@ -1332,6 +1342,7 @@ void Entity::OnCollisionProximity(LWOOBJID otherEntity, const std::string& proxN
 	if (!other) return;
 
 	GetScript()->OnProximityUpdate(this, other, proxName, status);
+	VanityUtilities::OnProximityUpdate(this, other, proxName, status);
 
 	RocketLaunchpadControlComponent* rocketComp = GetComponent<RocketLaunchpadControlComponent>();
 	if (!rocketComp) return;
@@ -1351,7 +1362,7 @@ void Entity::OnCollisionPhantom(const LWOOBJID otherEntity) {
 
 	SwitchComponent* switchComp = GetComponent<SwitchComponent>();
 	if (switchComp) {
-		switchComp->EntityEnter(other);
+		switchComp->OnUse(other);
 	}
 
 	TriggerEvent(eTriggerEventType::ENTER, other);
@@ -2133,6 +2144,8 @@ void Entity::ProcessPositionUpdate(PositionUpdate& update) {
 	Game::entityManager->QueueGhostUpdate(GetObjectID());
 
 	if (updateChar) Game::entityManager->SerializeEntity(this);
+
+	OnPlayerPositionUpdate.Notify(this, update);
 }
 
 const SystemAddress& Entity::GetSystemAddress() const {
@@ -2154,7 +2167,19 @@ void Entity::SetRespawnPos(const NiPoint3& position) {
 	auto* characterComponent = GetComponent<CharacterComponent>();
 	if (characterComponent) characterComponent->SetRespawnPos(position);
 }
+
 void Entity::SetRespawnRot(const NiQuaternion& rotation) {
 	auto* characterComponent = GetComponent<CharacterComponent>();
 	if (characterComponent) characterComponent->SetRespawnRot(rotation);
+}
+
+int32_t Entity::GetCollisionGroup() const {
+	for (const auto* component : m_Components | std::views::values) {
+		auto* compToCheck = dynamic_cast<const PhysicsComponent*>(component);	
+		if (compToCheck) {
+			return compToCheck->GetCollisionGroup();
+		}
+	}
+
+	return 0;
 }
