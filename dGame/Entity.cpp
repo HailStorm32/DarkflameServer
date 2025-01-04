@@ -775,6 +775,12 @@ void Entity::Initialize() {
 	// Hacky way to trigger these when the object has had a chance to get constructed
 	AddCallbackTimer(0, [this]() {
 		this->GetScript()->OnStartup(this);
+		if (this->m_ParentEntity) {
+			GameMessages::ChildLoaded childLoaded;
+			childLoaded.childID = this->m_ObjectID;
+			childLoaded.templateID = this->GetLOT();
+			this->m_ParentEntity->OnChildLoaded(childLoaded);
+		}
 		});
 
 	if (!m_Character && Game::entityManager->GetGhostingEnabled()) {
@@ -854,6 +860,9 @@ void Entity::Subscribe(LWOOBJID scriptObjId, CppScripts::Script* scriptToAdd, co
 		auto* destroyableComponent = GetComponent<DestroyableComponent>();
 		if (!destroyableComponent) return;
 		destroyableComponent->Subscribe(scriptObjId, scriptToAdd);
+	} else if (notificationName == "PlayerResurrectionFinished") {
+		LOG("Subscribing to PlayerResurrectionFinished");
+		m_Subscriptions[scriptObjId][notificationName] = scriptToAdd;
 	}
 }
 
@@ -862,6 +871,9 @@ void Entity::Unsubscribe(LWOOBJID scriptObjId, const std::string& notificationNa
 		auto* destroyableComponent = GetComponent<DestroyableComponent>();
 		if (!destroyableComponent) return;
 		destroyableComponent->Unsubscribe(scriptObjId);
+	} else if (notificationName == "PlayerResurrectionFinished") {
+		LOG("Unsubscribing from PlayerResurrectionFinished");
+		m_Subscriptions[scriptObjId].erase(notificationName);
 	}
 }
 
@@ -1491,6 +1503,27 @@ void Entity::OnMessageBoxResponse(Entity* sender, int32_t button, const std::u16
 
 void Entity::OnChoiceBoxResponse(Entity* sender, int32_t button, const std::u16string& buttonIdentifier, const std::u16string& identifier) {
 	GetScript()->OnChoiceBoxResponse(this, sender, button, buttonIdentifier, identifier);
+}
+
+void Entity::OnActivityNotify(GameMessages::ActivityNotify& notify) {
+	GetScript()->OnActivityNotify(this, notify);
+}
+
+void Entity::OnShootingGalleryFire(GameMessages::ShootingGalleryFire& fire) {
+	GetScript()->OnShootingGalleryFire(*this, fire);
+}
+
+void Entity::OnChildLoaded(GameMessages::ChildLoaded& childLoaded) {
+	GetScript()->OnChildLoaded(*this, childLoaded);
+}
+
+void Entity::NotifyPlayerResurrectionFinished(GameMessages::PlayerResurrectionFinished& msg) {
+	for (const auto& [id, scriptList] : m_Subscriptions) {
+		auto it = scriptList.find("PlayerResurrectionFinished");
+		if (it == scriptList.end()) continue;
+
+		it->second->NotifyPlayerResurrectionFinished(*this, msg);
+	}
 }
 
 void Entity::RequestActivityExit(Entity* sender, LWOOBJID player, bool canceled) {
