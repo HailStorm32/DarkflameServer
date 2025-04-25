@@ -77,14 +77,14 @@ public:
 	void UpdatePerformanceCost(const LWOZONEID& zoneId, const float performanceCost) override;
 	void InsertNewBugReport(const IBugReports::Info& info) override;
 	void InsertCheatDetection(const IPlayerCheatDetections::Info& info) override;
-	void InsertNewMail(const IMail::MailInfo& mail) override;
+	void InsertNewMail(const MailInfo& mail) override;
 	void InsertNewUgcModel(
 		std::istringstream& sd0Data,
 		const uint32_t blueprintId,
 		const uint32_t accountId,
 		const uint32_t characterId) override;
-	std::vector<IMail::MailInfo> GetMailForPlayer(const uint32_t characterId, const uint32_t numberOfMail) override;
-	std::optional<IMail::MailInfo> GetMail(const uint64_t mailId) override;
+	std::vector<MailInfo> GetMailForPlayer(const uint32_t characterId, const uint32_t numberOfMail) override;
+	std::optional<MailInfo> GetMail(const uint64_t mailId) override;
 	uint32_t GetUnreadMailCount(const uint32_t characterId) override;
 	void MarkMailRead(const uint64_t mailId) override;
 	void DeleteMail(const uint64_t mailId) override;
@@ -123,6 +123,7 @@ public:
 	void InsertUgcBuild(const std::string& modules, const LWOOBJID bigId, const std::optional<uint32_t> characterId) override;
 	void DeleteUgcBuild(const LWOOBJID bigId) override;
 	uint32_t GetAccountCount() override;
+	bool IsNameInUse(const std::string_view name) override;
 private:
 	CppSQLite3Statement CreatePreppedStmt(const std::string& query);
 
