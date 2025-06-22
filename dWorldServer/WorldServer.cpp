@@ -713,12 +713,12 @@ void HandleMasterPacket(Packet* packet) {
 			//Create our user and send them in:
 			UserManager::Instance()->CreateUser(it->second.sysAddr, username.GetAsString(), userHash);
 
-			auto zone = Game::zoneManager->GetZone();
-			if (zone) {
+			if (Game::zoneManager->HasZone()) {
 				float x = 0.0f;
 				float y = 0.0f;
 				float z = 0.0f;
 
+				auto zone = Game::zoneManager->GetZone();
 				if (zone->GetZoneID().GetMapID() == 1100) {
 					auto pos = zone->GetSpawnPos();
 					x = pos.x;
@@ -1367,6 +1367,7 @@ void HandlePacket(Packet* packet) {
 			std::string sMessage = GeneralUtils::UTF16ToWTF8(chatMessage.message);
 			LOG("%s: %s", playerName.c_str(), sMessage.c_str());
 			ChatPackets::SendChatMessage(packet->systemAddress, chatMessage.chatChannel, playerName, user->GetLoggedInChar(), isMythran, chatMessage.message);
+			if (PropertyManagementComponent::Instance()) PropertyManagementComponent::Instance()->OnChatMessageReceived(sMessage);
 		}
 
 		break;
