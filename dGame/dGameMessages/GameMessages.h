@@ -15,6 +15,7 @@
 #include "eGameMasterLevel.h"
 
 class AMFBaseValue;
+class AMFArrayValue;
 class Entity;
 class Item;
 class NiQuaternion;
@@ -54,6 +55,12 @@ namespace GameMessages {
 		GameMsg(MessageType::Game gmId, eGameMasterLevel lvl) : msgId{ gmId }, requiredGmLevel{ lvl } {}
 		GameMsg(MessageType::Game gmId) : GameMsg(gmId, eGameMasterLevel::CIVILIAN) {}
 		virtual ~GameMsg() = default;
+
+		// Sends a message to the entity manager to route to the target
+		bool Send();
+
+		// Sends the message to the specified client or
+		// all clients if UNASSIGNED_SYSTEM_ADDRESS is specified
 		void Send(const SystemAddress& sysAddr) const;
 		virtual void Serialize(RakNet::BitStream& bitStream) const {}
 		virtual bool Deserialize(RakNet::BitStream& bitStream) { return true; }
@@ -782,6 +789,13 @@ namespace GameMessages {
 		void Handle(Entity& entity, const SystemAddress& sysAddr) override;
 	};
 
+	struct GetObjectReportInfo : public GameMsg {
+		AMFArrayValue* info{};
+		bool bVerbose{};
+
+		GetObjectReportInfo() : GameMsg(MessageType::Game::GET_OBJECT_REPORT_INFO, eGameMasterLevel::DEVELOPER) {}
+	};
+
 	struct RequestUse : public GameMsg {
 		RequestUse() : GameMsg(MessageType::Game::REQUEST_USE) {}
 
@@ -843,5 +857,10 @@ namespace GameMessages {
 		LWOOBJID targetID;
 	};
 
+	struct GetPosition : public GameMsg {
+		GetPosition() : GameMsg(MessageType::Game::GET_POSITION) {}
+
+		NiPoint3 pos{};
+	};
 };
 #endif // GAMEMESSAGES_H

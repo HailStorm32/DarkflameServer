@@ -129,6 +129,8 @@ Entity* EntityManager::CreateEntity(EntityInfo info, User* user, Entity* parentE
 	// Set the zone control entity if the entity is a zone control object, this should only happen once
 	if (controller) {
 		m_ZoneControlEntity = entity;
+		// Proooooobably shouldn't ghost zoneControl
+		m_ZoneControlEntity->SetIsGhostingCandidate(false);
 	}
 
 	// Check if this entity is a respawn point, if so add it to the registry
@@ -417,7 +419,7 @@ void EntityManager::DestructEntity(Entity* entity, const SystemAddress& sysAddr)
 
 void EntityManager::SerializeEntity(Entity* entity) {
 	if (!entity) return;
-	
+
 	EntityManager::SerializeEntity(*entity);
 }
 
@@ -511,9 +513,9 @@ void EntityManager::UpdateGhosting(Entity* player) {
 
 			ghostComponent->ObserveEntity(id);
 
-			ConstructEntity(entity, player->GetSystemAddress());
-
 			entity->SetObservers(entity->GetObservers() + 1);
+
+			ConstructEntity(entity, player->GetSystemAddress());
 		}
 	}
 }
@@ -601,4 +603,15 @@ void EntityManager::FireEventServerSide(Entity* origin, std::string args) {
 
 bool EntityManager::IsExcludedFromGhosting(LOT lot) {
 	return std::find(m_GhostingExcludedLOTs.begin(), m_GhostingExcludedLOTs.end(), lot) != m_GhostingExcludedLOTs.end();
+}
+
+bool EntityManager::SendMessage(GameMessages::GameMsg& msg) const {
+	bool handled = false;
+	const auto entityItr = m_Entities.find(msg.target);
+	if (entityItr != m_Entities.end()) {
+		auto* const entity = entityItr->second;
+		if (entity) handled = entity->HandleMsg(msg);
+	}
+
+	return handled;
 }
