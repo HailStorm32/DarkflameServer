@@ -153,7 +153,7 @@ void SlashCommandHandler::SendAnnouncement(const std::string& title, const std::
 
 	//Notify chat about it
 	CBITSTREAM;
-	BitStreamUtils::WriteHeader(bitStream, eConnectionType::CHAT, MessageType::Chat::GM_ANNOUNCE);
+	BitStreamUtils::WriteHeader(bitStream, ServiceType::CHAT, MessageType::Chat::GM_ANNOUNCE);
 
 	bitStream.Write<uint32_t>(title.size());
 	for (auto character : title) {
@@ -1459,6 +1459,14 @@ void SlashCommandHandler::Startup() {
 		.info = "Turns all players' pvp mode on",
 		.aliases = {"barfight"},
 		.handle = DEVGMCommands::Barfight,
+		.requiredLevel = eGameMasterLevel::DEVELOPER
+	});
+
+	RegisterCommand({
+		.help = "Despawns an object by id",
+		.info = "Despawns an object by id",
+		.aliases = {"despawn"},
+		.handle = DEVGMCommands::Despawn,
 		.requiredLevel = eGameMasterLevel::DEVELOPER
 	});
 }

@@ -44,6 +44,7 @@
 #include "SkillComponent.h"
 #include "TriggerComponent.h"
 #include "RigidbodyPhantomPhysicsComponent.h"
+#include "PhantomPhysicsComponent.h"
 
 // Enums
 #include "eGameMasterLevel.h"
@@ -506,7 +507,7 @@ namespace DEVGMCommands {
 	void ShutdownUniverse(Entity* entity, const SystemAddress& sysAddr, const std::string args) {
 		//Tell the master server that we're going to be shutting down whole "universe":
 		CBITSTREAM;
-		BitStreamUtils::WriteHeader(bitStream, eConnectionType::MASTER, MessageType::Master::SHUTDOWN_UNIVERSE);
+		BitStreamUtils::WriteHeader(bitStream, ServiceType::MASTER, MessageType::Master::SHUTDOWN_UNIVERSE);
 		Game::server->SendToMaster(bitStream);
 		ChatPackets::SendSystemMessage(sysAddr, u"Sent universe shutdown notification to master.");
 
@@ -762,6 +763,7 @@ namespace DEVGMCommands {
 		info.spawner = nullptr;
 		info.spawnerID = entity->GetObjectID();
 		info.spawnerNodeID = 0;
+		info.settings = { new LDFData<bool>(u"SpawnedFromSlashCommand", true) };
 
 		Entity* newEntity = Game::entityManager->CreateEntity(info, nullptr);
 
@@ -803,6 +805,7 @@ namespace DEVGMCommands {
 		info.spawner = nullptr;
 		info.spawnerID = entity->GetObjectID();
 		info.spawnerNodeID = 0;
+		info.settings = { new LDFData<bool>(u"SpawnedFromSlashCommand", true) };
 
 		auto playerPosition = entity->GetPosition();
 		while (numberToSpawn > 0) {
@@ -1521,7 +1524,8 @@ namespace DEVGMCommands {
 		GameMessages::RequestServerObjectInfo objectInfo;
 		objectInfo.bVerbose = true;
 		objectInfo.target = closest->GetObjectID();
-		objectInfo.targetForReport = entity->GetObjectID();
+		objectInfo.targetForReport = closest->GetObjectID();
+		objectInfo.clientId = entity->GetObjectID();
 		closest->HandleMsg(objectInfo);
 
 		Game::entityManager->SerializeEntity(closest);
@@ -1636,5 +1640,28 @@ namespace DEVGMCommands {
 		}
 		const auto msg = u"Pvp has been turned on for all players by " + GeneralUtils::ASCIIToUTF16(characterComponent->GetName());
 		ChatPackets::SendSystemMessage(UNASSIGNED_SYSTEM_ADDRESS, msg, true);
+	}
+
+	void Despawn(Entity* entity, const SystemAddress& sysAddr, const std::string args) {
+		if (args.empty()) return;
+
+		const auto splitArgs = GeneralUtils::SplitString(args, ' ');
+		const auto objId = GeneralUtils::TryParse<LWOOBJID>(splitArgs[0]);
+		if (!objId) return;
+
+		auto* const target = Game::entityManager->GetEntity(*objId);
+		if (!target) {
+			ChatPackets::SendSystemMessage(sysAddr, u"Entity not found: " + GeneralUtils::UTF8ToUTF16(splitArgs[0]));
+			return;
+		}
+
+		if (!target->GetVar<bool>(u"SpawnedFromSlashCommand")) {
+			ChatPackets::SendSystemMessage(sysAddr, u"You cannot despawn this entity as it was not despawned from a slash command.");
+			return;
+		}
+
+		target->Smash(LWOOBJID_EMPTY, eKillType::SILENT);
+		LOG("Despawned entity (%llu)", target->GetObjectID());
+		ChatPackets::SendSystemMessage(sysAddr, u"Despawned entity: " + GeneralUtils::to_u16string(target->GetObjectID()));
 	}
 };

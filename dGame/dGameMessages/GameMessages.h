@@ -791,6 +791,7 @@ namespace GameMessages {
 
 	struct GetObjectReportInfo : public GameMsg {
 		AMFArrayValue* info{};
+		AMFArrayValue* subCategory{};
 		bool bVerbose{};
 
 		GetObjectReportInfo() : GameMsg(MessageType::Game::GET_OBJECT_REPORT_INFO, eGameMasterLevel::DEVELOPER) {}
@@ -861,6 +862,14 @@ namespace GameMessages {
 		GetPosition() : GameMsg(MessageType::Game::GET_POSITION) {}
 
 		NiPoint3 pos{};
+	};
+
+	struct SetFaction : public GameMsg {
+		SetFaction() : GameMsg(MessageType::Game::SET_FACTION) {}
+
+		int32_t factionID{};
+
+		bool bIgnoreChecks{ false };
 	};
 };
 #endif // GAMEMESSAGES_H
