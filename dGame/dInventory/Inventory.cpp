@@ -12,7 +12,7 @@ std::vector<LOT> Inventory::m_GameMasterRestrictedItems = {
 		// 1727, // GM Only - JetPack
 		2243, // GM Only - Hammer of Doom
 		3293, // GM Only - Flamethrower
-		3735, // GM Only - Large Jetpack
+		// 3735, // GM Only - Large Jetpack
 		5873, // GM Only - Winged Helm of Speed
 		6407, // Gm Only - Hat of Pwnage
 		14442 // The jamesster jetpack
