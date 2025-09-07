@@ -578,10 +578,26 @@ void PetComponent::RequestSetPetName(std::u16string name) {
 		return;
 	}
 
+	// If server configured to restrict name submissions while muted, auto-reject
+	if (Game::config->GetValue("mute_restricts_name_submission") == "1") {
+		auto* tamerUser = tamer->GetCharacter() ? tamer->GetCharacter()->GetParentUser() : nullptr;
+		if (tamerUser && tamerUser->GetIsMuted()) {
+			// Mark as rejected in moderation DB so it's auto-rejected and cannot be resubmitted
+			m_ModerationStatus = 0; // Rejected
+			m_Name = "";
+			Database::Get()->SetPetNameModerationStatus(m_DatabaseId, IPetNames::Info{ std::string(), 0 });
+			// Inform the client that the pet name was rejected
+			std::u16string u16name = GeneralUtils::UTF8ToUTF16(m_Name);
+			GameMessages::SendSetPetName(m_Tamer, u16name, m_DatabaseId, tamer->GetSystemAddress());
+			GameMessages::SendSetPetNameModerated(m_Tamer, m_DatabaseId, m_ModerationStatus, tamer->GetSystemAddress());
+			return;
+		}
+	}
+
 	m_ModerationStatus = 1; // Pending
 	m_Name = "";
 
-	//Save our pet's new name to the db:
+//Save our pet's new name to the db:
 	SetPetNameForModeration(GeneralUtils::UTF16ToWTF8(name));
 
 	Game::entityManager->SerializeEntity(m_Parent);

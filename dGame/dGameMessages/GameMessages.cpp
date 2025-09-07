@@ -3241,6 +3241,16 @@ void GameMessages::HandleClientTradeRequest(RakNet::BitStream& inStream, Entity*
 	// Check if the player has restricted trade access
 	auto* character = entity->GetCharacter();
 
+	// If server configured to restrict trade while muted, block muted users here
+	if (Game::config->GetValue("mute_restricts_trade") == "1" && character && character->GetParentUser() && character->GetParentUser()->GetIsMuted()) {
+		ChatPackets::SendSystemMessage(
+			sysAddr,
+			u"You are muted and cannot trade."
+		);
+
+		return;
+	}
+
 	if (character->HasPermission(ePermissionMap::RestrictedTradeAccess)) {
 		// Send a message to the player
 		ChatPackets::SendSystemMessage(
@@ -3314,6 +3324,19 @@ void GameMessages::HandleClientTradeAccept(RakNet::BitStream& inStream, Entity* 
 
 	if (trade == nullptr) return;
 
+	// If trade restriction on mute is enabled, block muted players from accepting trades
+	if (Game::config->GetValue("mute_restricts_trade") == "1") {
+		auto* character = entity->GetCharacter();
+		if (character && character->GetParentUser() && character->GetParentUser()->GetIsMuted()) {
+			ChatPackets::SendSystemMessage(
+				sysAddr,
+				u"You are muted and cannot participate in trades."
+			);
+
+			return;
+		}
+	}
+
 	trade->SetAccepted(entity->GetObjectID(), bFirst);
 }
 
@@ -3325,6 +3348,19 @@ void GameMessages::HandleClientTradeUpdate(RakNet::BitStream& inStream, Entity* 
 	inStream.Read(itemCount);
 
 	LOG("Trade update from (%llu) -> (%llu), (%i)", entity->GetObjectID(), currency, itemCount);
+
+	// If trade restriction on mute is enabled, block muted players from updating trades
+	if (Game::config->GetValue("mute_restricts_trade") == "1") {
+		auto* character = entity->GetCharacter();
+		if (character && character->GetParentUser() && character->GetParentUser()->GetIsMuted()) {
+			ChatPackets::SendSystemMessage(
+				sysAddr,
+				u"You are muted and cannot participate in trades."
+			);
+
+			return;
+		}
+	}
 
 	std::vector<TradeItem> items{};
 

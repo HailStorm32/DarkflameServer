@@ -476,6 +476,14 @@ void UserManager::RenameCharacter(const SystemAddress& sysAddr, Packet* packet) 
 	if (!ownsCharacter || !character) {
 		WorldPackets::SendCharacterRenameResponse(sysAddr, eRenameResponse::UNKNOWN_ERROR);
 	} else if (ownsCharacter && character) {
+		// If server configured to restrict name submissions while muted, auto-reject and clear pending rename
+		if (Game::config->GetValue("mute_restricts_name_submission") == "1" && u->GetIsMuted()) {
+			// Ensure no pending name and prevent resubmit by clearing pending_name and needs_rename via DB helper
+			Database::Get()->SetPendingCharacterName(charID, "");
+			// Respond to client as name unavailable
+			WorldPackets::SendCharacterRenameResponse(sysAddr, eRenameResponse::NAME_UNAVAILABLE);
+			return;
+		}
 		if (newName == character->GetName()) {
 			WorldPackets::SendCharacterRenameResponse(sysAddr, eRenameResponse::NAME_UNAVAILABLE);
 			return;
