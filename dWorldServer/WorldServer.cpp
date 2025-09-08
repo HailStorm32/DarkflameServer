@@ -623,8 +623,8 @@ void HandlePacketChat(Packet* packet) {
 				if (user) {
 					user->SetMuteExpire(expire);
 
-					entity->GetCharacter()->SendMuteNotice();
-				}
+                                        entity->GetCharacter()->SendMuteNotice();
+                                }
 
 				break;
 			}

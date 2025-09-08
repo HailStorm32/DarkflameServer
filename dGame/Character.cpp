@@ -501,7 +501,7 @@ void Character::OnZoneLoad() {
 }
 
 ePermissionMap Character::GetPermissionMap() const {
-	return m_PermissionMap;
+        return m_PermissionMap;
 }
 
 bool Character::HasPermission(ePermissionMap permission) const {

@@ -391,12 +391,12 @@ public:
 	 */
 	ePermissionMap GetPermissionMap() const;
 
-	/**
-	 * Check if this character has a certain permission
-	 * @param permission the ID of the permission to check for
-	 * @return whether the character has the specified permission
-	 */
-	bool HasPermission(ePermissionMap permission) const;
+       /**
+        * Check if this character has a certain permission
+        * @param permission the ID of the permission to check for
+        * @return whether the character has the specified permission
+        */
+       bool HasPermission(ePermissionMap permission) const;
 
 	/**
 	 * Gets all the emotes this character has unlocked so far
