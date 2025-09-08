@@ -82,7 +82,6 @@
 #include "MissionComponent.h"
 #include "SlashCommandHandler.h"
 #include "InventoryComponent.h"
-#include "ePermissionMap.h"
 
 namespace Game {
 	Logger* logger = nullptr;

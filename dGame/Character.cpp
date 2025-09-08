@@ -501,15 +501,7 @@ void Character::OnZoneLoad() {
 }
 
 ePermissionMap Character::GetPermissionMap() const {
-	return m_PermissionMap;
-}
-
-void Character::GrantPermission(ePermissionMap permission) {
-	m_PermissionMap = static_cast<ePermissionMap>(static_cast<uint64_t>(m_PermissionMap) | static_cast<uint64_t>(permission));
-}
-
-void Character::RevokePermission(ePermissionMap permission) {
-	m_PermissionMap = static_cast<ePermissionMap>(static_cast<uint64_t>(m_PermissionMap) & ~static_cast<uint64_t>(permission));
+        return m_PermissionMap;
 }
 
 bool Character::HasPermission(ePermissionMap permission) const {

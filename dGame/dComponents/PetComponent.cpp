@@ -10,6 +10,7 @@
 #include "InventoryComponent.h"
 #include "Item.h"
 #include "MissionComponent.h"
+#include "User.h"
 #include "SwitchComponent.h"
 #include "DestroyableComponent.h"
 #include "dpWorld.h"

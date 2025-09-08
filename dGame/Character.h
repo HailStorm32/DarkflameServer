@@ -391,24 +391,12 @@ public:
 	 */
 	ePermissionMap GetPermissionMap() const;
 
-	/**
-	 * Adds a permission to this character's permission map.
-	 * @param permission the permission to add
-	 */
-	void GrantPermission(ePermissionMap permission);
-
-	/**
-	 * Removes a permission from this character's permission map.
-	 * @param permission the permission to remove
-	 */
-	void RevokePermission(ePermissionMap permission);
-
-	/**
-	 * Check if this character has a certain permission
-	 * @param permission the ID of the permission to check for
-	 * @return whether the character has the specified permission
-	 */
-	bool HasPermission(ePermissionMap permission) const;
+       /**
+        * Check if this character has a certain permission
+        * @param permission the ID of the permission to check for
+        * @return whether the character has the specified permission
+        */
+       bool HasPermission(ePermissionMap permission) const;
 
 	/**
 	 * Gets all the emotes this character has unlocked so far
