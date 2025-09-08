@@ -10,14 +10,15 @@ enum class eGameMasterLevel : uint8_t;
 
 class IAccounts {
 public:
-	struct Info {
-		std::string bcryptPassword;
-		uint32_t id{};
-		uint32_t playKeyId{};
-		bool banned{};
-		bool locked{};
-		eGameMasterLevel maxGmLevel{};
-	};
+        struct Info {
+                std::string bcryptPassword;
+                uint32_t id{};
+                uint32_t playKeyId{};
+               uint64_t muteExpire{};
+                bool banned{};
+                bool locked{};
+                eGameMasterLevel maxGmLevel{};
+        };
 
 	// Get the account info for the given username.
 	virtual std::optional<IAccounts::Info> GetAccountInfo(const std::string_view username) = 0;

@@ -4,7 +4,7 @@
 #include "Database.h"
 
 std::optional<IAccounts::Info> SQLiteDatabase::GetAccountInfo(const std::string_view username) {
-	auto [_, result] = ExecuteSelect("SELECT * FROM accounts WHERE name = ? LIMIT 1", username);
+       auto [_, result] = ExecuteSelect("SELECT * FROM accounts WHERE name = ? LIMIT 1", username);
 
 	if (result.eof()) {
 		return std::nullopt;
@@ -16,7 +16,8 @@ std::optional<IAccounts::Info> SQLiteDatabase::GetAccountInfo(const std::string_
 	toReturn.bcryptPassword = result.getStringField("password");
 	toReturn.banned = result.getIntField("banned");
 	toReturn.locked = result.getIntField("locked");
-	toReturn.playKeyId = result.getIntField("play_key_id");
+       toReturn.playKeyId = result.getIntField("play_key_id");
+       toReturn.muteExpire = static_cast<uint64_t>(result.getInt64Field("mute_expire"));
 
 	return toReturn;
 }
