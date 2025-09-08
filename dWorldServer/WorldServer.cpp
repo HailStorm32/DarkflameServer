@@ -82,6 +82,7 @@
 #include "MissionComponent.h"
 #include "SlashCommandHandler.h"
 #include "InventoryComponent.h"
+#include "ePermissionMap.h"
 
 namespace Game {
 	Logger* logger = nullptr;
@@ -623,8 +624,8 @@ void HandlePacketChat(Packet* packet) {
 				if (user) {
 					user->SetMuteExpire(expire);
 
-					entity->GetCharacter()->SendMuteNotice();
-				}
+                                        entity->GetCharacter()->SendMuteNotice();
+                                }
 
 				break;
 			}

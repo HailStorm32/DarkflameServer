@@ -21,6 +21,7 @@
 #include "eUseItemResponse.h"
 #include "ePlayerFlag.h"
 
+#include "GeneralUtils.h"
 #include "Game.h"
 #include "dConfig.h"
 #include "dChatFilter.h"
@@ -545,32 +546,43 @@ void PetComponent::NotifyTamingBuildSuccess(NiPoint3 position) {
 }
 
 void PetComponent::RequestSetPetName(std::u16string name) {
-	if (m_Tamer == LWOOBJID_EMPTY) {
-		if (m_Owner != LWOOBJID_EMPTY) {
-			auto* owner = GetOwner();
+       const bool autoRejectNames = GeneralUtils::TryParse<bool>(Game::config->GetValue("mute_auto_reject_names")).value_or(true);
 
-			m_ModerationStatus = 1; // Pending
-			m_Name = "";
+       if (m_Tamer == LWOOBJID_EMPTY) {
+               if (m_Owner != LWOOBJID_EMPTY) {
+                       auto* owner = GetOwner();
+                       if (autoRejectNames && owner && owner->GetCharacter() && owner->GetCharacter()->GetParentUser()->GetIsMuted()) {
+                               m_ModerationStatus = 2; // Approved
+                               m_Name = "";
+                               Database::Get()->SetPetNameModerationStatus(m_DatabaseId, IPetNames::Info{ "", m_ModerationStatus });
+                               GameMessages::SendSetPetName(m_Owner, u"", m_DatabaseId, owner->GetSystemAddress());
+                               GameMessages::SendSetPetNameModerated(m_Owner, m_DatabaseId, m_ModerationStatus, owner->GetSystemAddress());
+                               return;
+                       }
 
-			//Save our pet's new name to the db:
-			SetPetNameForModeration(GeneralUtils::UTF16ToWTF8(name));
+                       m_ModerationStatus = 1; // Pending
+                       m_Name = "";
 
-			GameMessages::SendSetPetName(m_Owner, GeneralUtils::UTF8ToUTF16(m_Name), m_DatabaseId, owner->GetSystemAddress());
-			GameMessages::SendSetPetNameModerated(m_Owner, m_DatabaseId, m_ModerationStatus, owner->GetSystemAddress());
-		}
+                       //Save our pet's new name to the db:
+                       SetPetNameForModeration(GeneralUtils::UTF16ToWTF8(name));
 
-		return;
-	}
+                       GameMessages::SendSetPetName(m_Owner, GeneralUtils::UTF8ToUTF16(m_Name), m_DatabaseId, owner->GetSystemAddress());
+                       GameMessages::SendSetPetNameModerated(m_Owner, m_DatabaseId, m_ModerationStatus, owner->GetSystemAddress());
+               }
 
-	auto* tamer = Game::entityManager->GetEntity(m_Tamer);
+               return;
+       }
 
-	if (tamer == nullptr) {
-		m_Tamer = LWOOBJID_EMPTY;
+       auto* tamer = Game::entityManager->GetEntity(m_Tamer);
 
-		return;
-	}
+       if (tamer == nullptr) {
+               m_Tamer = LWOOBJID_EMPTY;
 
-	LOG("Got set pet name (%s)", GeneralUtils::UTF16ToWTF8(name).c_str());
+               return;
+       }
+
+
+       LOG("Got set pet name (%s)", GeneralUtils::UTF16ToWTF8(name).c_str());
 
 	auto* inventoryComponent = tamer->GetComponent<InventoryComponent>();
 

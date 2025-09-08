@@ -9,6 +9,7 @@
 #include "GeneralUtils.h"
 #include "Database.h"
 #include "Game.h"
+#include "dConfig.h"
 #include "dServer.h"
 #include "Entity.h"
 #include "Character.h"
@@ -72,7 +73,8 @@ namespace Mail {
 	void SendRequest::Handle() {
 		SendResponse response;
 		auto* character = player->GetCharacter();
-		if (character && !(character->HasPermission(ePermissionMap::RestrictedMailAccess) || character->GetParentUser()->GetIsMuted())) {
+		const bool restrictMailOnMute = GeneralUtils::TryParse<bool>(Game::config->GetValue("mute_restrict_mail")).value_or(true);
+		if (character && !(character->HasPermission(ePermissionMap::RestrictedMailAccess) || (restrictMailOnMute && character->GetParentUser()->GetIsMuted()))) {
 			mailInfo.recipient = std::regex_replace(mailInfo.recipient, std::regex("[^0-9a-zA-Z]+"), "");
 			auto receiverID = Database::Get()->GetCharacterInfo(mailInfo.recipient);
 

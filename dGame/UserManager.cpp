@@ -30,6 +30,7 @@
 #include "BitStreamUtils.h"
 #include "CheatDetection.h"
 #include "CharacterComponent.h"
+#include "dConfig.h"
 
 UserManager* UserManager::m_Address = nullptr;
 
@@ -369,6 +370,9 @@ void UserManager::CreateCharacter(const SystemAddress& sysAddr, Packet* packet) 
 
 		//Check to see if our name was pre-approved:
 		bool nameOk = IsNamePreapproved(name);
+				const bool autoRejectNames = GeneralUtils::TryParse<bool>(Game::config->GetValue("mute_auto_reject_names")).value_or(true);
+				if (autoRejectNames && u->GetIsMuted()) {
+					nameOk = false;				}
 		if (!nameOk && u->GetMaxGMLevel() > eGameMasterLevel::FORUM_MODERATOR) nameOk = true;
 
 		// If predefined name is invalid, change it to be their object id
@@ -456,6 +460,7 @@ void UserManager::RenameCharacter(const SystemAddress& sysAddr, Packet* packet) 
 	const auto newName = LUWStringName.GetAsString();
 
 	Character* character = nullptr;
+	const bool autoRejectNames = GeneralUtils::TryParse<bool>(Game::config->GetValue("mute_auto_reject_names")).value_or(true);
 
 	//Check if this user has this character:
 	bool ownsCharacter = CheatDetection::VerifyLwoobjidIsSender(
@@ -476,6 +481,11 @@ void UserManager::RenameCharacter(const SystemAddress& sysAddr, Packet* packet) 
 	if (!ownsCharacter || !character) {
 		WorldPackets::SendCharacterRenameResponse(sysAddr, eRenameResponse::UNKNOWN_ERROR);
 	} else if (ownsCharacter && character) {
+		if (autoRejectNames && u->GetIsMuted()) {
+			Database::Get()->SetCharacterName(charID, character->GetName());
+			WorldPackets::SendCharacterRenameResponse(sysAddr, eRenameResponse::SUCCESS);
+			return;
+		}
 		if (newName == character->GetName()) {
 			WorldPackets::SendCharacterRenameResponse(sysAddr, eRenameResponse::NAME_UNAVAILABLE);
 			return;
