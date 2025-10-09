@@ -67,7 +67,7 @@ public:
 	static constexpr uint32_t MaximumGroupCount = 50;
 
 	static constexpr eReplicaComponentType ComponentType = eReplicaComponentType::INVENTORY;
-	InventoryComponent(Entity* parent);
+	InventoryComponent(Entity* parent, const int32_t componentID);
 
 	void Update(float deltaTime) override;
 	void Serialize(RakNet::BitStream& outBitStream, bool bIsInitialUpdate) override;
@@ -402,9 +402,13 @@ public:
 	bool SetSkill(BehaviorSlot slot, uint32_t skillId);
 
 	void UpdateGroup(const GroupUpdate& groupUpdate);
-	void RemoveGroup(const std::string& groupId);
+
+	std::unordered_map<LWOOBJID, DatabasePet>& GetPetsMut() { return m_Pets; };
 
 	void FixInvisibleItems();
+
+	// Used to migrate a character version, no need to call outside of that context
+	void RegenerateItemIDs();
 
 	~InventoryComponent() override;
 
