@@ -694,6 +694,8 @@ void DestroyableComponent::NotifySubscribers(Entity* attacker, uint32_t damage) 
 }
 
 void DestroyableComponent::Smash(const LWOOBJID source, const eKillType killType, const std::u16string& deathType, uint32_t skillID) {
+	if (m_IsDead) return;
+
 	//check if hardcore mode is enabled
 	if (Game::entityManager->GetHardcoreMode()) {
 		DoHardcoreModeDrops(source);
@@ -706,6 +708,7 @@ void DestroyableComponent::Smash(const LWOOBJID source, const eKillType killType
 		Game::entityManager->SerializeEntity(m_Parent);
 	}
 
+	m_IsDead = true;
 	m_KillerID = source;
 
 	auto* owner = Game::entityManager->GetEntity(source);
@@ -753,36 +756,7 @@ void DestroyableComponent::Smash(const LWOOBJID source, const eKillType killType
 	//NANI?!
 	if (!isPlayer) {
 		if (owner != nullptr) {
-			auto* team = TeamManager::Instance()->GetTeam(owner->GetObjectID());
-
-			if (team != nullptr && m_Parent->GetComponent<BaseCombatAIComponent>() != nullptr) {
-				LWOOBJID specificOwner = LWOOBJID_EMPTY;
-				auto* scriptedActivityComponent = m_Parent->GetComponent<ScriptedActivityComponent>();
-				uint32_t teamSize = team->members.size();
-				uint32_t lootMatrixId = GetLootMatrixID();
-
-				if (scriptedActivityComponent) {
-					lootMatrixId = scriptedActivityComponent->GetLootMatrixForTeamSize(teamSize);
-				}
-
-				if (team->lootOption == 0) { // Round robin
-					specificOwner = TeamManager::Instance()->GetNextLootOwner(team);
-
-					auto* member = Game::entityManager->GetEntity(specificOwner);
-
-					if (member) Loot::DropLoot(member, m_Parent->GetObjectID(), lootMatrixId, GetMinCoins(), GetMaxCoins());
-				} else {
-					for (const auto memberId : team->members) { // Free for all
-						auto* member = Game::entityManager->GetEntity(memberId);
-
-						if (member == nullptr) continue;
-
-						Loot::DropLoot(member, m_Parent->GetObjectID(), lootMatrixId, GetMinCoins(), GetMaxCoins());
-					}
-				}
-			} else { // drop loot for non team user
-				Loot::DropLoot(owner, m_Parent->GetObjectID(), GetLootMatrixID(), GetMinCoins(), GetMaxCoins());
-			}
+			Loot::DropLoot(owner, m_Parent->GetObjectID(), GetLootMatrixID(), GetMinCoins(), GetMaxCoins());
 		}
 	} else {
 		//Check if this zone allows coin drops
@@ -1043,8 +1017,8 @@ void DestroyableComponent::DoHardcoreModeDrops(const LWOOBJID source) {
 			auto maxHealth = GetMaxHealth();
 			const auto uscoreMultiplier = Game::entityManager->GetHardcoreUscoreEnemiesMultiplier();
 			const bool isUscoreReducedLot =
-			Game::entityManager->GetHardcoreUscoreReducedLots().contains(lot) ||
-			Game::entityManager->GetHardcoreUscoreReduced();
+				Game::entityManager->GetHardcoreUscoreReducedLots().contains(lot) ||
+				Game::entityManager->GetHardcoreUscoreReduced();
 			const auto uscoreReduction = isUscoreReducedLot ? Game::entityManager->GetHardcoreUscoreReduction() : 1.0f;
 
 			int uscore = maxHealth * Game::entityManager->GetHardcoreUscoreEnemiesMultiplier() * uscoreReduction;

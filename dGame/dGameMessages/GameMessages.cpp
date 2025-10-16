@@ -978,6 +978,7 @@ void GameMessages::SendResurrect(Entity* entity) {
 		auto* destroyableComponent = entity->GetComponent<DestroyableComponent>();
 
 		if (destroyableComponent != nullptr && entity->GetLOT() == 1) {
+			destroyableComponent->SetIsDead(false);
 			auto* levelComponent = entity->GetComponent<LevelProgressionComponent>();
 			if (levelComponent) {
 				int32_t healthToRestore = levelComponent->GetLevel() >= 45 ? 8 : 4;
@@ -1102,52 +1103,6 @@ void GameMessages::SendDropClientLoot(Entity* entity, const LWOOBJID& sourceID, 
 
 		finalPosition = NiPoint3(static_cast<float>(spawnPos.GetX() + sin_v), spawnPos.GetY(), static_cast<float>(spawnPos.GetZ() + cos_v));
 	}
-
-	//Write data to packet & send:
-	CBITSTREAM;
-	CMSGHEADER;
-
-	bitStream.Write(entity->GetObjectID());
-	bitStream.Write(MessageType::Game::DROP_CLIENT_LOOT);
-
-	bitStream.Write(bUsePosition);
-
-	bitStream.Write(finalPosition != NiPoint3Constant::ZERO);
-	if (finalPosition != NiPoint3Constant::ZERO) bitStream.Write(finalPosition);
-
-	bitStream.Write(currency);
-	bitStream.Write(item);
-	bitStream.Write(lootID);
-	bitStream.Write(owner);
-	bitStream.Write(sourceID);
-
-	bitStream.Write(spawnPos != NiPoint3Constant::ZERO);
-	if (spawnPos != NiPoint3Constant::ZERO) bitStream.Write(spawnPos);
-
-	auto* team = TeamManager::Instance()->GetTeam(owner);
-
-	// Currency and powerups should not sync
-	if (team != nullptr && currency == 0) {
-		CDObjectsTable* objectsTable = CDClientManager::GetTable<CDObjectsTable>();
-
-		const CDObjects& object = objectsTable->GetByID(item);
-
-		if (object.type != "Powerup") {
-			for (const auto memberId : team->members) {
-				auto* member = Game::entityManager->GetEntity(memberId);
-
-				if (member == nullptr) continue;
-
-				SystemAddress sysAddr = member->GetSystemAddress();
-				SEND_PACKET;
-			}
-
-			return;
-		}
-	}
-
-	SystemAddress sysAddr = entity->GetSystemAddress();
-	SEND_PACKET;
 }
 
 void GameMessages::SendSetPlayerControlScheme(Entity* entity, eControlScheme controlScheme) {
@@ -2565,9 +2520,6 @@ void GameMessages::HandleBBBSaveRequest(RakNet::BitStream& inStream, Entity* ent
 	inStream.Read(timeTaken);
 
 	/*
-		Disabled this, as it's kinda silly to do this roundabout way of storing plaintext lxfml, then recompressing
-		it to send it back to the client.
-
 		On DLU we had agreed that bricks wouldn't be taken anyway, but if your server decides otherwise, feel free to
 		comment this back out and add the needed code to get the bricks used from lxfml and take them from the inventory.
 
@@ -2581,23 +2533,6 @@ void GameMessages::HandleBBBSaveRequest(RakNet::BitStream& inStream, Entity* ent
 
 	//We need to get a new ID for our model first:
 	if (!entity || !entity->GetCharacter() || !entity->GetCharacter()->GetParentUser()) return;
-	const uint32_t maxRetries = 100;
-	uint32_t retries = 0;
-	bool blueprintIDExists = true;
-	bool modelExists = true;
-
-	// Legacy logic to check for old random IDs (regenerating these is not really feasible)
-	// Probably good to have this anyway in case someone messes with the last_object_id or it gets reset somehow
-	LWOOBJID newIDL = LWOOBJID_EMPTY;
-	LWOOBJID blueprintID = LWOOBJID_EMPTY;
-	do {
-		if (newIDL != LWOOBJID_EMPTY) LOG("Generating blueprintID for UGC model, collision with existing model ID: %llu", blueprintID);
-		newIDL = ObjectIDManager::GetPersistentID();
-		blueprintID = ObjectIDManager::GetPersistentID();
-		++retries;
-		blueprintIDExists = Database::Get()->GetUgcModel(blueprintID).has_value();
-		modelExists = Database::Get()->GetModel(newIDL).has_value();
-	} while ((blueprintIDExists || modelExists) && retries < maxRetries);
 
 	//We need to get the propertyID: (stolen from Wincent's propertyManagementComp)
 	const auto& worldId = Game::zoneManager->GetZone()->GetZoneID();
@@ -2614,85 +2549,120 @@ void GameMessages::HandleBBBSaveRequest(RakNet::BitStream& inStream, Entity* ent
 	std::istringstream sd0DataStream(str);
 	Sd0 sd0(sd0DataStream);
 
-	// Uncompress the data and normalize the position
+	// Uncompress the data, split, and nornmalize the model
 	const auto asStr = sd0.GetAsStringUncompressed();
-	const auto [newLxfml, newCenter] = Lxfml::NormalizePosition(asStr);
 
-	// Recompress the data and save to the database
-	sd0.FromData(reinterpret_cast<const uint8_t*>(newLxfml.data()), newLxfml.size());
-	auto sd0AsStream = sd0.GetAsStream();
-	Database::Get()->InsertNewUgcModel(sd0AsStream, blueprintID, entity->GetCharacter()->GetParentUser()->GetAccountID(), entity->GetCharacter()->GetID());
+	if (Game::config->GetValue("save_lxfmls") == "1") {
+		// save using localId to avoid conflicts
+		std::ofstream outFile("debug_lxfml_uncompressed_" + std::to_string(localId) + ".lxfml");
+		outFile << asStr;
+		outFile.close();
+	}
 
-	//Insert into the db as a BBB model:
-	IPropertyContents::Model model;
-	model.id = newIDL;
-	model.ugcId = blueprintID;
-	model.position = newCenter;
-	model.rotation = NiQuaternion(0.0f, 0.0f, 0.0f, 0.0f);
-	model.lot = 14;
-	Database::Get()->InsertNewPropertyModel(propertyId, model, "Objects_14_name");
+	auto splitLxfmls = Lxfml::Split(asStr);
+	LOG_DEBUG("Split into %zu models", splitLxfmls.size());
 
-	/*
-		Commented out until UGC server would be updated to use a sd0 file instead of lxfml stream.
-		(or you uncomment the lxfml decomp stuff above)
-	*/
-
-	// //Send off to UGC for processing, if enabled:
-	// if (Game::config->GetValue("ugc_remote") == "1") {
-	// 	std::string ugcIP = Game::config->GetValue("ugc_ip");
-	// 	int ugcPort = std::stoi(Game::config->GetValue("ugc_port"));
-
-	// 	httplib::Client cli(ugcIP, ugcPort); //connect to UGC HTTP server using our config above ^
-
-	// 	//Send out a request:
-	// 	std::string request = "/3dservices/UGCC150/150" + std::to_string(blueprintID) + ".lxfml";
-	// 	cli.Put(request.c_str(), lxfml.c_str(), "text/lxfml");
-
-	// 	//When the "put" above returns, it means that the UGC HTTP server is done processing our model &
-	// 	//the nif, hkx and checksum files are ready to be downloaded from cache.
-	// }
-
-	//Tell the client their model is saved: (this causes us to actually pop out of our current state):
-	const auto& newSd0 = sd0.GetAsVector();
-	uint32_t newSd0Size{};
-	for (const auto& chunk : newSd0) newSd0Size += chunk.size();
 	CBITSTREAM;
 	BitStreamUtils::WriteHeader(bitStream, ServiceType::CLIENT, MessageType::Client::BLUEPRINT_SAVE_RESPONSE);
 	bitStream.Write(localId);
 	bitStream.Write(eBlueprintSaveResponseType::EverythingWorked);
-	bitStream.Write<uint32_t>(1);
-	bitStream.Write(blueprintID);
+	bitStream.Write<uint32_t>(splitLxfmls.size());
 
-	bitStream.Write(newSd0Size);
+	std::vector<LWOOBJID> blueprintIDs;
+	std::vector<LWOOBJID> modelIDs;
 
-	for (const auto& chunk : newSd0) bitStream.WriteAlignedBytes(reinterpret_cast<const unsigned char*>(chunk.data()), chunk.size());
+	for (size_t i = 0; i < splitLxfmls.size(); ++i) {
+		// Legacy logic to check for old random IDs (regenerating these is not really feasible)
+		// Probably good to have this anyway in case someone messes with the last_object_id or it gets reset somehow
+		const uint32_t maxRetries = 100;
+		uint32_t retries = 0;
+		bool blueprintIDExists = true;
+		bool modelExists = true;
+
+		LWOOBJID newID = LWOOBJID_EMPTY;
+		LWOOBJID blueprintID = LWOOBJID_EMPTY;
+		do {
+			if (newID != LWOOBJID_EMPTY) LOG("Generating blueprintID for UGC model, collision with existing model ID: %llu", blueprintID);
+			newID = ObjectIDManager::GetPersistentID();
+			blueprintID = ObjectIDManager::GetPersistentID();
+			++retries;
+			blueprintIDExists = Database::Get()->GetUgcModel(blueprintID).has_value();
+			modelExists = Database::Get()->GetModel(newID).has_value();
+		} while ((blueprintIDExists || modelExists) && retries < maxRetries);
+
+		blueprintIDs.push_back(blueprintID);
+		modelIDs.push_back(newID);
+
+		// Save each model to the database
+		sd0.FromData(reinterpret_cast<const uint8_t*>(splitLxfmls[i].lxfml.data()), splitLxfmls[i].lxfml.size());
+		auto sd0AsStream = sd0.GetAsStream();
+		Database::Get()->InsertNewUgcModel(sd0AsStream, blueprintID, entity->GetCharacter()->GetParentUser()->GetAccountID(), entity->GetCharacter()->GetID());
+
+		// Insert the new property model
+		IPropertyContents::Model model;
+		model.id = newID;
+		model.ugcId = blueprintID;
+		model.position = splitLxfmls[i].center;
+		model.rotation = QuatUtils::IDENTITY;
+		model.lot = 14;
+		Database::Get()->InsertNewPropertyModel(propertyId, model, "Objects_14_name");
+
+		/*
+			Commented out until UGC server would be updated to use a sd0 file instead of lxfml stream.
+			(or you uncomment the lxfml decomp stuff above)
+		*/
+
+		// Send off to UGC for processing, if enabled:
+		// if (Game::config->GetValue("ugc_remote") == "1") {
+		// 	std::string ugcIP = Game::config->GetValue("ugc_ip");
+		// 	int ugcPort = std::stoi(Game::config->GetValue("ugc_port"));
+
+		// 	httplib::Client cli(ugcIP, ugcPort); //connect to UGC HTTP server using our config above ^
+
+		// 	//Send out a request:
+		// 	std::string request = "/3dservices/UGCC150/150" + std::to_string(blueprintID) + ".lxfml";
+		// 	cli.Put(request.c_str(), lxfml.c_str(), "text/lxfml");
+
+		// 	//When the "put" above returns, it means that the UGC HTTP server is done processing our model &
+		// 	//the nif, hkx and checksum files are ready to be downloaded from cache.
+		// }
+
+		// Write the ID and data to the response packet
+		bitStream.Write(blueprintID);
+
+		const auto& newSd0 = sd0.GetAsVector();
+		uint32_t newSd0Size{};
+		for (const auto& chunk : newSd0) newSd0Size += chunk.size();
+		bitStream.Write(newSd0Size);
+		for (const auto& chunk : newSd0) bitStream.WriteAlignedBytes(reinterpret_cast<const unsigned char*>(chunk.data()), chunk.size());
+	}
 
 	SEND_PACKET;
 
-	//Now we have to construct this object:
+	// Create entities for each model
+	for (size_t i = 0; i < splitLxfmls.size(); ++i) {
+		EntityInfo info;
+		info.lot = 14;
+		info.pos = splitLxfmls[i].center;
+		info.rot = QuatUtils::IDENTITY;
+		info.spawner = nullptr;
+		info.spawnerID = entity->GetObjectID();
+		info.spawnerNodeID = 0;
 
-	EntityInfo info;
-	info.lot = 14;
-	info.pos = newCenter;
-	info.rot = {};
-	info.spawner = nullptr;
-	info.spawnerID = entity->GetObjectID();
-	info.spawnerNodeID = 0;
+		info.settings.push_back(new LDFData<LWOOBJID>(u"blueprintid", blueprintIDs[i]));
+		info.settings.push_back(new LDFData<int>(u"componentWhitelist", 1));
+		info.settings.push_back(new LDFData<int>(u"modelType", 2));
+		info.settings.push_back(new LDFData<bool>(u"propertyObjectID", true));
+		info.settings.push_back(new LDFData<LWOOBJID>(u"userModelID", modelIDs[i]));
+		Entity* newEntity = Game::entityManager->CreateEntity(info, nullptr);
+		if (newEntity) {
+			Game::entityManager->ConstructEntity(newEntity);
 
-	info.settings.push_back(new LDFData<LWOOBJID>(u"blueprintid", blueprintID));
-	info.settings.push_back(new LDFData<int>(u"componentWhitelist", 1));
-	info.settings.push_back(new LDFData<int>(u"modelType", 2));
-	info.settings.push_back(new LDFData<bool>(u"propertyObjectID", true));
-	info.settings.push_back(new LDFData<LWOOBJID>(u"userModelID", newIDL));
-
-	Entity* newEntity = Game::entityManager->CreateEntity(info, nullptr);
-	if (newEntity) {
-		Game::entityManager->ConstructEntity(newEntity);
-
-		//Make sure the propMgmt doesn't delete our model after the server dies
-		//Trying to do this after the entity is constructed. Shouldn't really change anything but
-		//there was an issue with builds not appearing since it was placed above ConstructEntity.
-		PropertyManagementComponent::Instance()->AddModel(newEntity->GetObjectID(), newIDL);
+			//Make sure the propMgmt doesn't delete our model after the server dies
+			//Trying to do this after the entity is constructed. Shouldn't really change anything but
+			//there was an issue with builds not appearing since it was placed above ConstructEntity.
+			PropertyManagementComponent::Instance()->AddModel(newEntity->GetObjectID(), modelIDs[i]);
+		}
 	}
 }
 
@@ -5717,27 +5687,6 @@ void GameMessages::HandleModularBuildMoveAndEquip(RakNet::BitStream& inStream, E
 	inv->MoveItemToInventory(item, eInventoryType::MODELS, 1, false, true);
 }
 
-void GameMessages::HandlePickupItem(RakNet::BitStream& inStream, Entity* entity) {
-	LWOOBJID lootObjectID;
-	LWOOBJID playerID;
-	inStream.Read(lootObjectID);
-	inStream.Read(playerID);
-
-	entity->PickupItem(lootObjectID);
-
-	auto* team = TeamManager::Instance()->GetTeam(entity->GetObjectID());
-
-	if (team != nullptr) {
-		for (const auto memberId : team->members) {
-			auto* member = Game::entityManager->GetEntity(memberId);
-
-			if (member == nullptr || memberId == playerID) continue;
-
-			SendTeamPickupItem(lootObjectID, lootObjectID, playerID, member->GetSystemAddress());
-		}
-	}
-}
-
 void GameMessages::HandleResurrect(RakNet::BitStream& inStream, Entity* entity) {
 	bool immediate = inStream.ReadBit();
 
@@ -6321,6 +6270,11 @@ namespace GameMessages {
 		return Game::entityManager->SendMessage(*this);
 	}
 
+	bool GameMsg::Send(const LWOOBJID _target) {
+		target = _target;
+		return Send();
+	}
+
 	void GameMsg::Send(const SystemAddress& sysAddr) const {
 		CBITSTREAM;
 		CMSGHEADER;
@@ -6487,5 +6441,50 @@ namespace GameMessages {
 	void EmotePlayed::Serialize(RakNet::BitStream& stream) const {
 		stream.Write(emoteID);
 		stream.Write(targetID);
+	}
+
+	void DropClientLoot::Serialize(RakNet::BitStream& stream) const {
+		stream.Write(bUsePosition);
+
+		stream.Write(finalPosition != NiPoint3Constant::ZERO);
+		if (finalPosition != NiPoint3Constant::ZERO) stream.Write(finalPosition);
+
+		stream.Write(currency);
+		stream.Write(item);
+		stream.Write(lootID);
+		stream.Write(ownerID);
+		stream.Write(sourceID);
+
+		stream.Write(spawnPos != NiPoint3Constant::ZERO);
+		if (spawnPos != NiPoint3Constant::ZERO) stream.Write(spawnPos);
+	}
+
+	bool PickupItem::Deserialize(RakNet::BitStream& stream) {
+		if (!stream.Read(lootID)) return false;
+		if (!stream.Read(lootOwnerID)) return false;
+		return true;
+	}
+
+	void PickupItem::Handle(Entity& entity, const SystemAddress& sysAddr) {
+		auto* team = TeamManager::Instance()->GetTeam(entity.GetObjectID());
+		LOG("Has team %i picking up %llu:%llu", team != nullptr, lootID, lootOwnerID);
+		if (team) {
+			for (const auto memberId : team->members) {
+				this->Send(memberId);
+				TeamPickupItem teamPickupMsg{};
+				teamPickupMsg.target = lootID;
+				teamPickupMsg.lootID = lootID;
+				teamPickupMsg.lootOwnerID = lootOwnerID;
+				const auto* const memberEntity = Game::entityManager->GetEntity(memberId);
+				if (memberEntity) teamPickupMsg.Send(memberEntity->GetSystemAddress());
+			}
+		} else {
+			entity.PickupItem(lootID);
+		}
+	}
+
+	void TeamPickupItem::Serialize(RakNet::BitStream& stream) const {
+		stream.Write(lootID);	
+		stream.Write(lootOwnerID);	
 	}
 }
