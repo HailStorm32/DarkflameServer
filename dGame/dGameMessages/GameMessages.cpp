@@ -1847,18 +1847,6 @@ void GameMessages::SendNotifyClientFailedPrecondition(LWOOBJID objectId, const S
 	SEND_PACKET;
 }
 
-void GameMessages::SendToggleGMInvis(LWOOBJID objectId, bool enabled, const SystemAddress& sysAddr) {
-	CBITSTREAM;
-	CMSGHEADER;
-
-	bitStream.Write(objectId);
-	bitStream.Write(MessageType::Game::TOGGLE_GM_INVIS);
-	bitStream.Write(enabled); // does not matter?
-
-	if (sysAddr == UNASSIGNED_SYSTEM_ADDRESS) SEND_PACKET_BROADCAST;
-	SEND_PACKET;
-}
-
 void GameMessages::SendSetName(LWOOBJID objectID, std::u16string name, const SystemAddress& sysAddr) {
 	CBITSTREAM;
 	CMSGHEADER;
@@ -5943,6 +5931,7 @@ void GameMessages::HandleUpdatePlayerStatistic(RakNet::BitStream& inStream, Enti
 void GameMessages::HandleDeactivateBubbleBuff(RakNet::BitStream& inStream, Entity* entity) {
 	auto controllablePhysicsComponent = entity->GetComponent<ControllablePhysicsComponent>();
 	if (controllablePhysicsComponent) controllablePhysicsComponent->DeactivateBubbleBuff();
+	GameMessages::SendDeactivateBubbleBuffFromServer(entity->GetObjectID(), entity->GetSystemAddress());
 }
 
 void GameMessages::HandleActivateBubbleBuff(RakNet::BitStream& inStream, Entity* entity) {
@@ -6448,5 +6437,9 @@ namespace GameMessages {
 	void TeamPickupItem::Serialize(RakNet::BitStream& stream) const {
 		stream.Write(lootID);	
 		stream.Write(lootOwnerID);	
+	}
+
+	void ToggleGMInvis::Serialize(RakNet::BitStream& stream) const {
+		stream.Write(bStateOut);
 	}
 }
