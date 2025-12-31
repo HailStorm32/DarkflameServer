@@ -6026,8 +6026,16 @@ void GameMessages::HandleAddDonationItem(RakNet::BitStream& inStream, Entity* en
 	inStream.Read(itemId);
 	if (!itemId) return;
 
-	auto* donationVendorComponent = entity->GetComponent<DonationVendorComponent>();
-	if (!donationVendorComponent) return;
+        auto* donationVendorComponent = entity->GetComponent<DonationVendorComponent>();
+        if (!donationVendorComponent) {
+                if (auto* characterComponent = entity->GetComponent<CharacterComponent>(); characterComponent) {
+                        auto* interactingEntity = Game::entityManager->GetEntity(characterComponent->GetCurrentInteracting());
+                        if (interactingEntity) {
+                                donationVendorComponent = interactingEntity->GetComponent<DonationVendorComponent>();
+                        }
+                }
+        }
+        if (!donationVendorComponent) return;
 	if (donationVendorComponent->GetActivityID() == 0) {
 		LOG("WARNING: Trying to dontate to a vendor with no activity");
 		return;
@@ -6072,6 +6080,13 @@ void GameMessages::HandleRemoveDonationItem(RakNet::BitStream& inStream, Entity*
         auto inventoryType = eInventoryType::BRICKS;
         if (auto* donationVendorComponent = entity->GetComponent<DonationVendorComponent>(); donationVendorComponent) {
                 inventoryType = donationVendorComponent->GetDonationReturnInventoryType();
+        } else if (auto* characterComponent = player->GetComponent<CharacterComponent>(); characterComponent) {
+                auto* donationEntity = Game::entityManager->GetEntity(characterComponent->GetCurrentInteracting());
+                if (donationEntity) {
+                        if (auto* interactingDonationVendor = donationEntity->GetComponent<DonationVendorComponent>(); interactingDonationVendor) {
+                                inventoryType = interactingDonationVendor->GetDonationReturnInventoryType();
+                        }
+                }
         }
         inventoryComponent->MoveItemToInventory(item, inventoryType, count, true, false, true);
 }

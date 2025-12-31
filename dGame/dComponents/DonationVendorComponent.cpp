@@ -1,3 +1,5 @@
+#include <charconv>
+
 #include "DonationVendorComponent.h"
 #include "Database.h"
 #include "GeneralUtils.h"
@@ -16,9 +18,16 @@ DonationVendorComponent::DonationVendorComponent(Entity* parent, const int32_t c
         const auto& donationInventoryType = m_Parent->GetVar<std::u16string>(u"donationInventoryType");
         if (!donationInventoryType.empty()) {
                 const auto inventoryTypeName = GeneralUtils::UTF16ToWTF8(donationInventoryType);
-                const auto inventoryType = magic_enum::enum_cast<eInventoryType>(inventoryTypeName);
-                if (inventoryType.has_value()) {
+                // Accept either exact-case enum names or case-insensitive matches to be forgiving
+                if (const auto inventoryType = magic_enum::enum_cast<eInventoryType>(inventoryTypeName, magic_enum::case_insensitive)) {
                         m_DonationReturnInventoryType = inventoryType.value();
+                } else {
+                        // Support numeric inventory identifiers for vanity configs that prefer integers
+                        int64_t inventoryTypeId = 0;
+                        const auto [ptr, ec] = std::from_chars(inventoryTypeName.data(), inventoryTypeName.data() + inventoryTypeName.size(), inventoryTypeId);
+                        if (ec == std::errc() && inventoryTypeId >= 0 && inventoryTypeId <= static_cast<int64_t>(eInventoryType::ALL)) {
+                                m_DonationReturnInventoryType = static_cast<eInventoryType>(inventoryTypeId);
+                        }
                 }
         }
 
