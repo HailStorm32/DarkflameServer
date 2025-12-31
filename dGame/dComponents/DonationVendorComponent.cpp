@@ -1,5 +1,7 @@
 #include "DonationVendorComponent.h"
 #include "Database.h"
+#include "GeneralUtils.h"
+#include "magic_enum.hpp"
 
 DonationVendorComponent::DonationVendorComponent(Entity* parent, const int32_t componentID) : VendorComponent(parent, componentID) {
 	//LoadConfigData
@@ -7,12 +9,21 @@ DonationVendorComponent::DonationVendorComponent(Entity* parent, const int32_t c
 	m_TotalDonated = 0;
 	m_TotalRemaining = 0;
 
-	// custom attribute to calculate other values
-	m_Goal = m_Parent->GetVar<int32_t>(u"donationGoal");
-	if (m_Goal == 0) m_Goal = INT32_MAX;
+        // custom attribute to calculate other values
+        m_Goal = m_Parent->GetVar<int32_t>(u"donationGoal");
+        if (m_Goal == 0) m_Goal = INT32_MAX;
 
-	// Default to the nexus tower jawbox activity and setup settings
-	m_ActivityId = m_Parent->GetVar<uint32_t>(u"activityID");
+        const auto& donationInventoryType = m_Parent->GetVar<std::u16string>(u"donationInventoryType");
+        if (!donationInventoryType.empty()) {
+                const auto inventoryTypeName = GeneralUtils::UTF16ToWTF8(donationInventoryType);
+                const auto inventoryType = magic_enum::enum_cast<eInventoryType>(inventoryTypeName);
+                if (inventoryType.has_value()) {
+                        m_DonationReturnInventoryType = inventoryType.value();
+                }
+        }
+
+        // Default to the nexus tower jawbox activity and setup settings
+        m_ActivityId = m_Parent->GetVar<uint32_t>(u"activityID");
 	if ((m_ActivityId == 0) || (m_ActivityId == 117)) {
 		m_ActivityId = 117;
 		m_PercentComplete = 1.0;
