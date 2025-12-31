@@ -3,6 +3,7 @@
 #include "DonationVendorComponent.h"
 #include "Database.h"
 #include "GeneralUtils.h"
+#include "Logger.h"
 #include "magic_enum.hpp"
 
 DonationVendorComponent::DonationVendorComponent(Entity* parent, const int32_t componentID) : VendorComponent(parent, componentID) {
@@ -21,12 +22,16 @@ DonationVendorComponent::DonationVendorComponent(Entity* parent, const int32_t c
                 // Accept either exact-case enum names or case-insensitive matches to be forgiving
                 if (const auto inventoryType = magic_enum::enum_cast<eInventoryType>(inventoryTypeName, magic_enum::case_insensitive)) {
                         m_DonationReturnInventoryType = inventoryType.value();
+                        LOG("DonationVendorComponent(%llu): using donationInventoryType %s", m_Parent->GetObjectID(), inventoryTypeName.c_str());
                 } else {
                         // Support numeric inventory identifiers for vanity configs that prefer integers
                         int64_t inventoryTypeId = 0;
                         const auto [ptr, ec] = std::from_chars(inventoryTypeName.data(), inventoryTypeName.data() + inventoryTypeName.size(), inventoryTypeId);
                         if (ec == std::errc() && inventoryTypeId >= 0 && inventoryTypeId <= static_cast<int64_t>(eInventoryType::ALL)) {
                                 m_DonationReturnInventoryType = static_cast<eInventoryType>(inventoryTypeId);
+                                LOG("DonationVendorComponent(%llu): using donationInventoryType %s", m_Parent->GetObjectID(), inventoryTypeName.c_str());
+                        } else {
+                                LOG("DonationVendorComponent(%llu): unknown donationInventoryType '%s', defaulting to BRICKS", m_Parent->GetObjectID(), inventoryTypeName.c_str());
                         }
                 }
         }
