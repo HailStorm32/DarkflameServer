@@ -13,7 +13,7 @@
 #include "dpShapeSphere.h"
 #include "dZoneManager.h"
 #include "EntityInfo.h"
-#include "Metrics.hpp"
+#include "Metrics.h"
 #include "PlayerManager.h"
 #include "SlashCommandHandler.h"
 #include "UserManager.h"
@@ -825,7 +825,7 @@ namespace DEVGMCommands {
 		}
 
 		const auto numberToSpawnOptional = GeneralUtils::TryParse<uint32_t>(splitArgs[1]);
-		if (!numberToSpawnOptional && numberToSpawnOptional.value() > 0) {
+		if (!numberToSpawnOptional) {
 			ChatPackets::SendSystemMessage(sysAddr, u"Invalid number of enemies to spawn.");
 			return;
 		}
@@ -833,7 +833,7 @@ namespace DEVGMCommands {
 
 		// Must spawn within a radius of at least 0.0f
 		const auto radiusToSpawnWithinOptional = GeneralUtils::TryParse<float>(splitArgs[2]);
-		if (!radiusToSpawnWithinOptional && radiusToSpawnWithinOptional.value() < 0.0f) {
+		if (!radiusToSpawnWithinOptional || radiusToSpawnWithinOptional.value() < 0.0f) {
 			ChatPackets::SendSystemMessage(sysAddr, u"Invalid radius to spawn within.");
 			return;
 		}
@@ -1133,6 +1133,10 @@ namespace DEVGMCommands {
 		}
 
 		const auto& password = splitArgs[2];
+		if (password.length() >= 50) {
+			ChatPackets::SendSystemMessage(sysAddr, u"Password is too long.");
+			return;
+		}
 
 		ZoneInstanceManager::Instance()->CreatePrivateZone(Game::server, zone.value(), clone.value(), password);
 
@@ -1284,18 +1288,14 @@ namespace DEVGMCommands {
 		response.Insert("serverInfo", true);
 		auto* info = response.InsertArray("data");
 		for (const auto variable : Metrics::GetAllMetrics()) {
-			auto& metricData = info->PushDebug(StringifiedEnum::ToString(variable));
+			auto& metricData = info->PushDebug(Metrics::MetricVariableToString(variable));
 
-			auto* metric = Metrics::GetMetric(variable);
+			const auto& metric = Metrics::GetMetric(variable);
 
-			if (metric == nullptr) {
-				continue;
-			}
-
-			metricData.PushDebug<AMFStringValue>("Maximum") = std::to_string(Metrics::ToMiliseconds(metric->max)) + "ms";
-			metricData.PushDebug<AMFStringValue>("Minimum") = std::to_string(Metrics::ToMiliseconds(metric->min)) + "ms";
-			metricData.PushDebug<AMFStringValue>("Average") = std::to_string(Metrics::ToMiliseconds(metric->average)) + "ms";
-			metricData.PushDebug<AMFStringValue>("Measurements Count") = std::to_string(metric->measurementSize);
+			metricData.PushDebug<AMFStringValue>("Maximum") = std::to_string(Metrics::ToMiliseconds(metric.max)) + "ms";
+			metricData.PushDebug<AMFStringValue>("Minimum") = std::to_string(Metrics::ToMiliseconds(metric.min)) + "ms";
+			metricData.PushDebug<AMFStringValue>("Average") = std::to_string(Metrics::ToMiliseconds(metric.average)) + "ms";
+			metricData.PushDebug<AMFStringValue>("Measurements Count") = std::to_string(metric.measurementSize);
 		}
 		auto& processInfo = info->PushDebug("Process Info");
 		processInfo.PushDebug<AMFStringValue>("Peak RSS") = std::to_string(static_cast<double>(Metrics::GetPeakRSS()) / 1.024e6) + "MB";
