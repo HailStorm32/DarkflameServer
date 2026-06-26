@@ -881,9 +881,9 @@ void DestroyableComponent::FixStats() {
 	int32_t currentImagination = destroyableComponent->GetImagination();
 
 	// Unequip all items
-	auto equipped = inventoryComponent->GetEquippedItems();
+	const auto equipped = inventoryComponent->GetEquippedItems();
 
-	for (auto& equippedItem : equipped) {
+	for (const auto& equippedItem : equipped) {
 		// Get the item with the item ID
 		auto* item = inventoryComponent->FindItemById(equippedItem.second.id);
 
@@ -924,7 +924,7 @@ void DestroyableComponent::FixStats() {
 	buffComponent->ReApplyBuffs();
 
 	// Requip all items
-	for (auto& equippedItem : equipped) {
+	for (const auto& equippedItem : equipped) {
 		// Get the item with the item ID
 		auto* item = inventoryComponent->FindItemById(equippedItem.second.id);
 
@@ -1146,7 +1146,7 @@ bool DestroyableComponent::OnGetObjectReportInfo(GameMessages::GetObjectReportIn
 	destroyableInfo.PushDebug<AMFDoubleValue>("Explode Factor") = m_ExplodeFactor;
 	destroyableInfo.PushDebug<AMFBoolValue>("Has Threats") = m_HasThreats;
 
-	destroyableInfo.PushDebug<AMFStringValue>("Killer ID") = std::to_string(m_KillerID);
+	destroyableInfo.PushDebug<AMFStringValue>("Killer ID", "LWOOBJID") = std::to_string(m_KillerID);
 
 	// "Scripts"; idk what to do about scripts yet
 	auto& immuneCounts = destroyableInfo.PushDebug("Immune Counts");

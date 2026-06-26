@@ -221,8 +221,8 @@ void ModelComponent::RemoveBehavior(MoveToInventoryMessage& msg, const bool keep
 			auto* const inventoryComponent = playerEntity->GetComponent<InventoryComponent>();
 			if (inventoryComponent && !behavior.GetIsLoot()) {
 				// config is owned by the item
-				std::vector<LDFBaseData*> config;
-				config.push_back(new LDFData<std::string>(u"userModelName", behavior.GetName()));
+				LwoNameValue config;
+				config.Insert(u"userModelName", behavior.GetName());
 				inventoryComponent->AddItem(7965, 1, eLootSourceType::PROPERTY, eInventoryType::BEHAVIORS, config, LWOOBJID_EMPTY, true, false, msg.GetBehaviorId());
 			}
 		}
@@ -355,8 +355,8 @@ bool ModelComponent::OnGetObjectReportInfo(GameMessages::GetObjectReportInfo& re
 
 	cmptInfo.PushDebug<AMFStringValue>("Name") = "Objects_" + std::to_string(m_Parent->GetLOT()) + "_name";
 	cmptInfo.PushDebug<AMFBoolValue>("Has Unique Name") = false;
-	cmptInfo.PushDebug<AMFStringValue>("UGID (from item)") = std::to_string(m_userModelID);
-	cmptInfo.PushDebug<AMFStringValue>("UGID") = std::to_string(m_userModelID);
+	cmptInfo.PushDebug<AMFStringValue>("UGID (from item)", "LWOOBJID") = std::to_string(m_userModelID);
+	cmptInfo.PushDebug<AMFStringValue>("UGID", "LWOOBJID") = std::to_string(m_userModelID);
 	cmptInfo.PushDebug<AMFStringValue>("Description") = "";
 	cmptInfo.PushDebug<AMFIntValue>("Behavior Count") = m_Behaviors.size();
 
