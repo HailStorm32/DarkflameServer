@@ -6082,8 +6082,16 @@ void GameMessages::HandleAddDonationItem(RakNet::BitStream& inStream, Entity* en
 	inStream.Read(itemId);
 	if (!itemId) return;
 
-	auto* donationVendorComponent = entity->GetComponent<DonationVendorComponent>();
-	if (!donationVendorComponent) return;
+        auto* donationVendorComponent = entity->GetComponent<DonationVendorComponent>();
+        if (!donationVendorComponent) {
+                if (auto* characterComponent = entity->GetComponent<CharacterComponent>(); characterComponent) {
+                        auto* interactingEntity = Game::entityManager->GetEntity(characterComponent->GetCurrentInteracting());
+                        if (interactingEntity) {
+                                donationVendorComponent = interactingEntity->GetComponent<DonationVendorComponent>();
+                        }
+                }
+        }
+        if (!donationVendorComponent) return;
 	if (donationVendorComponent->GetActivityID() == 0) {
 		LOG("WARNING: Trying to dontate to a vendor with no activity");
 		return;
@@ -6122,10 +6130,21 @@ void GameMessages::HandleRemoveDonationItem(RakNet::BitStream& inStream, Entity*
 	auto* inventoryComponent = player->GetComponent<InventoryComponent>();
 	if (!inventoryComponent) return;
 
-	Item* item = inventoryComponent->FindItemById(itemId);
-	if (!item) return;
-	if (item->GetCount() < count) return;
-	inventoryComponent->MoveItemToInventory(item, eInventoryType::BRICKS, count, true, false, true);
+        Item* item = inventoryComponent->FindItemById(itemId);
+        if (!item) return;
+        if (item->GetCount() < count) return;
+        auto inventoryType = eInventoryType::BRICKS;
+        if (auto* donationVendorComponent = entity->GetComponent<DonationVendorComponent>(); donationVendorComponent) {
+                inventoryType = donationVendorComponent->GetDonationReturnInventoryType();
+        } else if (auto* characterComponent = player->GetComponent<CharacterComponent>(); characterComponent) {
+                auto* donationEntity = Game::entityManager->GetEntity(characterComponent->GetCurrentInteracting());
+                if (donationEntity) {
+                        if (auto* interactingDonationVendor = donationEntity->GetComponent<DonationVendorComponent>(); interactingDonationVendor) {
+                                inventoryType = interactingDonationVendor->GetDonationReturnInventoryType();
+                        }
+                }
+        }
+        inventoryComponent->MoveItemToInventory(item, inventoryType, count, true, false, true);
 }
 
 void GameMessages::HandleConfirmDonationOnPlayer(RakNet::BitStream& inStream, Entity* entity) {
@@ -6158,17 +6177,26 @@ void GameMessages::HandleConfirmDonationOnPlayer(RakNet::BitStream& inStream, En
 }
 
 void GameMessages::HandleCancelDonationOnPlayer(RakNet::BitStream& inStream, Entity* entity) {
-	auto* inventoryComponent = entity->GetComponent<InventoryComponent>();
-	if (!inventoryComponent) return;
-	auto* inventory = inventoryComponent->GetInventory(eInventoryType::DONATION);
-	if (!inventory) return;
-	auto items = inventory->GetItems();
-	for (auto& [itemID, item] : items) {
-		inventoryComponent->MoveItemToInventory(item, eInventoryType::BRICKS, item->GetCount(), false, false, true);
-	}
-	auto* characterComponent = entity->GetComponent<CharacterComponent>();
-	if (!characterComponent) return;
-	characterComponent->SetCurrentInteracting(LWOOBJID_EMPTY);
+        auto* inventoryComponent = entity->GetComponent<InventoryComponent>();
+        if (!inventoryComponent) return;
+        auto* inventory = inventoryComponent->GetInventory(eInventoryType::DONATION);
+        if (!inventory) return;
+        auto returnInventoryType = eInventoryType::BRICKS;
+        if (auto* characterComponent = entity->GetComponent<CharacterComponent>(); characterComponent) {
+                auto* donationEntity = Game::entityManager->GetEntity(characterComponent->GetCurrentInteracting());
+                if (donationEntity) {
+                        if (auto* donationVendorComponent = donationEntity->GetComponent<DonationVendorComponent>(); donationVendorComponent) {
+                                returnInventoryType = donationVendorComponent->GetDonationReturnInventoryType();
+                        }
+                }
+        }
+        auto items = inventory->GetItems();
+        for (auto& [itemID, item] : items) {
+                inventoryComponent->MoveItemToInventory(item, returnInventoryType, item->GetCount(), false, false, true);
+        }
+        auto* characterComponent = entity->GetComponent<CharacterComponent>();
+        if (!characterComponent) return;
+        characterComponent->SetCurrentInteracting(LWOOBJID_EMPTY);
 }
 
 void GameMessages::SendSlashCommandFeedbackText(Entity* entity, std::u16string text) {
