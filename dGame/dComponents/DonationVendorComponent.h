@@ -3,24 +3,27 @@
 
 #include "VendorComponent.h"
 #include "eReplicaComponentType.h"
+#include "dEnums/eInventoryType.h"
 
 class Entity;
 
 class DonationVendorComponent final : public VendorComponent {
 public:
 	static constexpr eReplicaComponentType ComponentType = eReplicaComponentType::DONATION_VENDOR;
-	DonationVendorComponent(Entity* parent, const int32_t componentID);
-	void Serialize(RakNet::BitStream& outBitStream, bool bIsInitialUpdate) override;
-	uint32_t GetActivityID() {return m_ActivityId;};
-	void SubmitDonation(uint32_t count);
+        DonationVendorComponent(Entity* parent, const int32_t componentID);
+        void Serialize(RakNet::BitStream& outBitStream, bool bIsInitialUpdate) override;
+        uint32_t GetActivityID() {return m_ActivityId;};
+        eInventoryType GetDonationReturnInventoryType() const { return m_DonationReturnInventoryType; }
+        void SubmitDonation(uint32_t count);
 
 private:
-	bool m_DirtyDonationVendor = false;
-	float m_PercentComplete = 0.0;
-	int32_t m_TotalDonated = 0;
-	int32_t m_TotalRemaining = 0;
-	uint32_t m_ActivityId = 0;
-	int32_t m_Goal = 0;
+        bool m_DirtyDonationVendor = false;
+        float m_PercentComplete = 0.0;
+        int32_t m_TotalDonated = 0;
+        int32_t m_TotalRemaining = 0;
+        uint32_t m_ActivityId = 0;
+        int32_t m_Goal = 0;
+        eInventoryType m_DonationReturnInventoryType = eInventoryType::BRICKS;
 };
 
 
